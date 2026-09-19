@@ -1,12 +1,12 @@
 `timescale 1ns/1ps
 `default_nettype none
 
-module gemv_core (
+module gemv (
     input  logic clk,
     input  logic reset,
 
-    input  logic a_we, // a matrix write enable
-    input  logic [5:0] a_addr, // 6-bit address for a matrix (64 elements)
+    input  logic a_we, // A matrix write enable
+    input  logic [5:0] a_addr, // 6-bit address for A matrix (64 elements)
     input  logic signed [7:0] a_wdata, // 8-bit signed matrix write data
     
     input  logic x_we, // x matrix write enable

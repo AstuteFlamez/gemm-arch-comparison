@@ -29,7 +29,7 @@ module tb_gemv_regression;
     integer checked_outputs = 0;
     integer fixture_count = 0;
 
-    gemv_core dut (
+    gemv dut (
         .clk(clk), .reset(reset),
         .a_we(a_we), .a_addr(a_addr), .a_wdata(a_wdata),
         .x_we(x_we), .x_addr(x_addr), .x_wdata(x_wdata),

@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 `default_nettype none
 
-module tb_gemv_core;
+module tb_gemv;
 
     logic clk;
     logic reset;
@@ -22,7 +22,7 @@ module tb_gemv_core;
     logic signed [31:0] expected [0:7];
     integer tests_passed = 0;
 
-    gemv_core dut (
+    gemv dut (
         .clk(clk),
         .reset(reset),
         .a_we(a_we),
@@ -181,7 +181,7 @@ module tb_gemv_core;
     // dump waveforms to a VCD file
     initial begin
         $dumpfile("gemv.vcd");
-        $dumpvars(0, tb_gemv_core);
+        $dumpvars(0, tb_gemv);
     end
 
     initial begin

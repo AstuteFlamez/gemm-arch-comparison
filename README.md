@@ -13,12 +13,13 @@ Details about each RTL mini-project and the tools I've used:
 
 - [MAC exercise](docs/mac.md)
 - [GEMV exercise](docs/gemv.md)
+- [GEMM exercise](docs/gemm.md)
 
 ## Repository layout
 
 ```text
 .
-├── rtl/       # SystemVerilog RTL: MAC, GEMV, and more to come
+├── rtl/       # SystemVerilog RTL: MAC, GEMV, GEMM, and more to come
 ├── tb/        # SystemVerilog testbenches
 ├── tests/     # Python reference model, vector generator, and tests
 ├── scripts/   # Environment checks and Synopsys library inspection

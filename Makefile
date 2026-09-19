@@ -6,11 +6,11 @@ VCS ?= vcs
 SEED ?= 20260917
 RANDOM_COUNT ?= 100
 
-.PHONY: help env smoke smoke-vcs test-python vectors mac-compile test-mac test-mac-vcs gemv-compile test-gemv test-gemv-vcs test-gemv-full test-gemv-full-vcs check
+.PHONY: help env smoke smoke-vcs test-python vectors mac-compile test-mac test-mac-vcs gemv-compile test-gemv test-gemv-vcs test-gemv-full test-gemv-full-vcs gemm-compile test-gemm test-gemm-vcs check
 
 help:
 	@printf '%s\n' \
-	  'Current milestone: test the user-written core in rtl/gemv.sv' \
+	  'Current milestone: test the GEMM core in rtl/gemm.sv' \
 	  '  make env        Find tools in this shell; write build/environment.json' \
 	  '  make smoke      Compile/run the local Icarus environment test' \
 	  '  make smoke-vcs  Compile/run the same test on a configured VCS machine' \
@@ -24,8 +24,11 @@ help:
 	  '  make test-gemv-vcs Run the basic GEMV tests on CAE' \
 	  '  make test-gemv-full Run the full arithmetic/protocol regression locally' \
 	  '  make test-gemv-full-vcs Run the full regression on CAE' \
+	  '  make gemm-compile Compile the GEMM core and its testbench' \
+	  '  make test-gemm    Run GEMM arithmetic and control checks locally' \
+	  '  make test-gemm-vcs Run GEMM checks on a configured VCS machine' \
 	  '  make check       Run env, local smoke, and Python checks' \
-	  'make check covers support checks only; run test-mac and test-gemv for RTL.'
+	  'make check covers support checks only; run test-mac, test-gemv-full, and test-gemm for RTL.'
 
 env:
 	$(PYTHON) scripts/check_env.py --output build/environment.json
@@ -60,14 +63,14 @@ test-mac-vcs:
 
 gemv-compile:
 	@mkdir -p build/gemv
-	$(IVERILOG) -g2012 -Wall -s tb_gemv_core -o build/gemv/gemv.vvp rtl/mac.sv rtl/gemv.sv tb/tb_gemv.sv > build/gemv/compile.log 2>&1 || { cat build/gemv/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_gemv -o build/gemv/gemv.vvp rtl/mac.sv rtl/gemv.sv tb/tb_gemv.sv > build/gemv/compile.log 2>&1 || { cat build/gemv/compile.log; exit 1; }
 
 test-gemv: gemv-compile
 	cd build/gemv && $(VVP) -l run.log gemv.vvp
 
 test-gemv-vcs:
 	@mkdir -p build/gemv/vcs
-	cd build/gemv/vcs && $(VCS) -full64 -sverilog -top tb_gemv_core ../../../rtl/mac.sv ../../../rtl/gemv.sv ../../../tb/tb_gemv.sv -o simv -l compile.log
+	cd build/gemv/vcs && $(VCS) -full64 -sverilog -top tb_gemv ../../../rtl/mac.sv ../../../rtl/gemv.sv ../../../tb/tb_gemv.sv -o simv -l compile.log
 	cd build/gemv/vcs && ./simv -l run.log
 
 test-gemv-full: vectors
@@ -79,5 +82,17 @@ test-gemv-full-vcs: vectors
 	@mkdir -p build/gemv-regression/vcs
 	cd build/gemv-regression/vcs && $(VCS) -full64 -sverilog -top tb_gemv_regression ../../../rtl/mac.sv ../../../rtl/gemv.sv ../../../tb/tb_gemv_regression.sv -o simv -l compile.log
 	cd build/gemv-regression/vcs && ./simv -l run.log +VECTORS=../../vectors/vectors.txt
+
+gemm-compile:
+	@mkdir -p build/gemm
+	$(IVERILOG) -g2012 -Wall -s tb_gemm -o build/gemm/gemm.vvp rtl/mac.sv rtl/gemm.sv tb/tb_gemm.sv > build/gemm/compile.log 2>&1 || { cat build/gemm/compile.log; exit 1; }
+
+test-gemm: gemm-compile
+	cd build/gemm && $(VVP) -l run.log gemm.vvp
+
+test-gemm-vcs:
+	@mkdir -p build/gemm/vcs
+	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm ../../../rtl/mac.sv ../../../rtl/gemm.sv ../../../tb/tb_gemm.sv -o simv -l compile.log
+	cd build/gemm/vcs && ./simv -l run.log
 
 check: env smoke test-python
