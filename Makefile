@@ -6,7 +6,7 @@ VCS ?= vcs
 SEED ?= 20260917
 RANDOM_COUNT ?= 100
 
-.PHONY: help env smoke smoke-vcs test-python vectors mac-compile test-mac test-mac-vcs gemv-compile test-gemv test-gemv-vcs test-gemv-full test-gemv-full-vcs gemm-compile test-gemm test-gemm-vcs check
+.PHONY: help env smoke smoke-vcs test-python vectors mac-compile test-mac test-mac-vcs gemv-compile test-gemv test-gemv-vcs test-gemv-full test-gemv-full-vcs gemm-compile test-gemm test-gemm-vcs sram-compile test-sram check
 
 help:
 	@printf '%s\n' \
@@ -27,6 +27,8 @@ help:
 	  '  make gemm-compile Compile the GEMM core and its testbench' \
 	  '  make test-gemm    Run GEMM arithmetic and control checks locally' \
 	  '  make test-gemm-vcs Run GEMM checks on a configured VCS machine' \
+	  '  make sram-compile Compile standalone SRAM checks in two configurations' \
+	  '  make test-sram    Run standalone SRAM checks (64x8 and 7x16)' \
 	  '  make check       Run env, local smoke, and Python checks' \
 	  'make check covers support checks only; run test-mac, test-gemv-full, and test-gemm for RTL.'
 
@@ -85,14 +87,23 @@ test-gemv-full-vcs: vectors
 
 gemm-compile:
 	@mkdir -p build/gemm
-	$(IVERILOG) -g2012 -Wall -s tb_gemm -o build/gemm/gemm.vvp rtl/mac.sv rtl/gemm.sv tb/tb_gemm.sv > build/gemm/compile.log 2>&1 || { cat build/gemm/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_gemm -o build/gemm/gemm.vvp rtl/mac.sv rtl/sram.sv rtl/gemm.sv tb/tb_gemm.sv > build/gemm/compile.log 2>&1 || { cat build/gemm/compile.log; exit 1; }
 
 test-gemm: gemm-compile
 	cd build/gemm && $(VVP) -l run.log gemm.vvp
 
 test-gemm-vcs:
 	@mkdir -p build/gemm/vcs
-	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm ../../../rtl/mac.sv ../../../rtl/gemm.sv ../../../tb/tb_gemm.sv -o simv -l compile.log
+	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm ../../../rtl/mac.sv ../../../rtl/sram.sv ../../../rtl/gemm.sv ../../../tb/tb_gemm.sv -o simv -l compile.log
 	cd build/gemm/vcs && ./simv -l run.log
+
+sram-compile:
+	@mkdir -p build/sram
+	$(IVERILOG) -g2012 -Wall -s tb_sram -o build/sram/sram.vvp rtl/sram.sv tb/tb_sram.sv > build/sram/compile.log 2>&1 || { cat build/sram/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_sram -Ptb_sram.DATA_WIDTH=16 -Ptb_sram.DEPTH=7 -o build/sram/sram-7x16.vvp rtl/sram.sv tb/tb_sram.sv > build/sram/compile-7x16.log 2>&1 || { cat build/sram/compile-7x16.log; exit 1; }
+
+test-sram: sram-compile
+	cd build/sram && $(VVP) -l run.log sram.vvp
+	cd build/sram && $(VVP) -l run-7x16.log sram-7x16.vvp
 
 check: env smoke test-python

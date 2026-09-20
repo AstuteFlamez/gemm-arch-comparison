@@ -14,12 +14,30 @@ Details about each RTL mini-project and the tools I've used:
 - [MAC exercise](docs/mac.md)
 - [GEMV exercise](docs/gemv.md)
 - [GEMM exercise](docs/gemm.md)
+- [SRAM exercise](docs/sram.md)
+
+## Current milestone
+
+GEMM now stores A and B in separate instances of a reusable synchronous SRAM
+module. Both memories register their read outputs, which feed the signed MAC
+inputs without another register stage. The calculation still takes 1,152 cycles
+after accepting `start`.
+
+C remains an internal array with asynchronous result reads. Moving C storage
+into a memory module is the next planned step.
+
+Run the standalone memory checks and GEMM regression from the project root:
+
+```sh
+make test-sram
+make test-gemm
+```
 
 ## Repository layout
 
 ```text
 .
-├── rtl/       # SystemVerilog RTL: MAC, GEMV, GEMM, and more to come
+├── rtl/       # SystemVerilog RTL: MAC, GEMV, GEMM, and SRAM
 ├── tb/        # SystemVerilog testbenches
 ├── tests/     # Python reference model, vector generator, and tests
 ├── scripts/   # Environment checks and Synopsys library inspection

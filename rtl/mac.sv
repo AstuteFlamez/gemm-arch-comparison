@@ -2,12 +2,12 @@
 `default_nettype none
 
 module mac (
-    input  logic               clk,
-    input  logic               reset,
-    input  logic               clear,
-    input  logic               enable,
-    input  logic signed [7:0]  a,
-    input  logic signed [7:0]  b,
+    input  logic clk,
+    input  logic reset,
+    input  logic clear,
+    input  logic enable,
+    input  logic signed [7:0] a,
+    input  logic signed [7:0] b,
     output logic signed [31:0] acc
 );
 

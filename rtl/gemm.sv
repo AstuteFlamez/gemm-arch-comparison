@@ -22,8 +22,6 @@ module gemm (
     output logic signed [31:0] c_rd_data // 32-bit signed output matrix read data
 );
 
-    logic signed [7:0] A [0:63]; // (matrix) 8-bits per 64 elements stored in a 1D array
-    logic signed [7:0] B [0:63]; // (matrix) 8-bits per 64 elements stored in a 1D array
     logic signed [31:0] C [0:63]; // (output matrix) 32-bits per 64 elements stored in a 1D array
     logic [7:0] row;
     logic [7:0] column;
@@ -37,6 +35,16 @@ module gemm (
         STORE
     } state_t;
     state_t state;
+
+    logic [5:0] a_mem_addr;
+    logic [7:0] a_mem_rdata;
+    logic a_mem_we;
+    logic a_mem_re;
+
+    logic [5:0] b_mem_addr;
+    logic [7:0] b_mem_rdata;
+    logic b_mem_we;
+    logic b_mem_re;
 
     logic mac_clear;
     logic mac_enable;
@@ -54,6 +62,40 @@ module gemm (
         .acc(mac_acc)
     );
 
+    sram #(
+        .DATA_WIDTH(8),
+        .DEPTH(64)
+    ) sram_a_instance (
+        .clk(clk),
+        .re(a_mem_re),
+        .we(a_mem_we),
+        .addr(a_mem_addr),
+        .rdata(a_mem_rdata),
+        .wdata(a_wdata)
+    );
+
+    sram #(
+        .DATA_WIDTH(8),
+        .DEPTH(64)
+    ) sram_b_instance (
+        .clk(clk),
+        .re(b_mem_re),
+        .we(b_mem_we),
+        .addr(b_mem_addr),
+        .rdata(b_mem_rdata),
+        .wdata(b_wdata)
+    );
+
+    assign a_mem_we = !reset && (state == IDLE) && a_we;
+    assign a_mem_re = !reset && (state == READ);
+    assign a_mem_addr = (state == IDLE) ? a_addr : (row * 8 + k);
+
+    assign b_mem_we = !reset && (state == IDLE) && b_we;
+    assign b_mem_re = !reset && (state == READ);
+    assign b_mem_addr = (state == IDLE) ? b_addr : (k * 8 + column);
+
+    assign mac_a = $signed(a_mem_rdata);
+    assign mac_b = $signed(b_mem_rdata);
     assign mac_clear = (state == CLEAR);     // assert mac_clear only in CLEAR state
     assign mac_enable = (state == MAC);      // assert mac_enable only in MAC state
     assign busy = (state != IDLE);           // assert busy whenever the controller is outside IDLE
@@ -70,12 +112,6 @@ module gemm (
         end else begin
             case (state)
                 IDLE: begin
-                    if (a_we) begin // write to A array when a_we is high
-                        A[a_addr] <= a_wdata;
-                    end
-                    if (b_we) begin // write to B array when b_we is high
-                        B[b_addr] <= b_wdata;
-                    end
                     if (start && !a_we && !b_we) begin // accept start only when neither write enable is high
                         row <= 8'd0;
                         column <= 8'd0;
@@ -90,8 +126,6 @@ module gemm (
                 end
 
                 READ: begin // register operands for the following MAC edge
-                    mac_a <= A[(row * 8) + k];
-                    mac_b <= B[(k * 8) + column];
                     state <= MAC;
                 end
 
