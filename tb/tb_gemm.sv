@@ -58,13 +58,29 @@ module tb_gemm;
                    label_text, wanted_busy, wanted_done, busy, done);
     endtask
 
+    task automatic check_read_data(
+        input logic signed [31:0] wanted_data,
+        input string label_text
+    );
+        if (c_rd_data !== wanted_data)
+            $fatal(1, "%s: expected C read data %h, got %h",
+                   label_text, wanted_data, c_rd_data);
+    endtask
+
     task automatic reset_core;
+        logic signed [31:0] held_read_data;
         @(negedge clk);
+        held_read_data = c_rd_data;
         idle_requests();
         reset = 1'b1;
+        // A different address must not trigger a read while reset is high.
+        c_rd_addr = c_rd_addr + 6'd1;
+        #1;
+        check_read_data(held_read_data, "reset asserted: C output holds");
         repeat (2) begin
             tick();
             check_status(1'b0, 1'b0, "reset");
+            check_read_data(held_read_data, "reset edge: C output holds");
         end
         @(negedge clk);
         reset = 1'b0;
@@ -111,6 +127,7 @@ module tb_gemm;
         @(negedge clk);
         idle_requests();
         start = 1'b1;
+        c_rd_addr = 6'd0;
         tick();
         check_status(1'b1, 1'b0, {label_text, ": accepted start"});
     endtask
@@ -120,6 +137,8 @@ module tb_gemm;
         input bit busy_noise,
         input bit hold_start
     );
+        logic signed [31:0] held_read_data;
+        held_read_data = c_rd_data;
         for (integer cycle = 1; cycle <= WORK_CYCLES; cycle = cycle + 1) begin
             @(negedge clk);
             // Writes and extra starts must be ignored through the last STORE.
@@ -130,7 +149,14 @@ module tb_gemm;
             b_addr = 6'd0;
             a_wdata = 8'sd127;
             b_wdata = -8'sd128;
+            // Host address changes must not disturb reads or STORE addresses.
+            c_rd_addr = cycle[5:0];
+            #1;
+            check_read_data(held_read_data, "busy address change: C output holds");
             tick();
+            // This includes the final STORE edge: done means the results are
+            // stored, but the first result read needs a subsequent idle edge.
+            check_read_data(held_read_data, "busy/STORE edge: C output holds");
             check_status(cycle < WORK_CYCLES, cycle == WORK_CYCLES,
                          $sformatf("%s: cycle %0d", label_text, cycle));
         end
@@ -138,21 +164,37 @@ module tb_gemm;
     endtask
 
     task automatic check_output(input integer index, input string label_text);
-        check_status(1'b0, 1'b1, {label_text, ": sticky done"});
         if (c_rd_data !== expected[index])
             $fatal(1, "%s: C[%0d] expected %0d, got %0d",
                    label_text, index, expected[index], c_rd_data);
         checked_outputs = checked_outputs + 1;
     endtask
 
+    task automatic read_result(
+        input integer index,
+        input string label_text,
+        input bit wanted_done = 1'b1
+    );
+        logic signed [31:0] previous_read;
+        @(negedge clk);
+        previous_read = c_rd_data;
+        idle_requests();
+        c_rd_addr = index[5:0];
+        #1;
+        check_read_data(previous_read, {label_text, ": before read edge"});
+        @(posedge clk);
+        // A clocked consumer at this edge still sees the previous output.
+        check_read_data(previous_read, {label_text, ": at read edge"});
+        #1;
+        // Wait for nonblocking updates, without adding another clock cycle.
+        check_status(1'b0, wanted_done, {label_text, ": after read edge"});
+        check_output(index, label_text);
+    endtask
+
     task automatic check_results(input string label_text);
-        for (integer i = 0; i < 64; i = i + 1) begin
-            @(negedge clk);
-            idle_requests();
-            c_rd_addr = i[5:0];
-            #1;
-            check_output(i, label_text);
-        end
+        // Consecutive idle edges must return consecutive selected words.
+        for (integer i = 0; i < 64; i = i + 1)
+            read_result(i, label_text);
         $display("PASS: %s", label_text);
     endtask
 
@@ -177,7 +219,8 @@ module tb_gemm;
         next_random_byte = $signed(random_state[31:24]);
     endfunction
 
-    initial begin
+    initial begin : tests
+        logic signed [31:0] previous_read;
         reset_core();
 
         set_patterned_inputs();
@@ -254,6 +297,28 @@ module tb_gemm;
             run_job($sformatf("write/start collision %0d", mode), 1'b0);
         end
 
+        // Preserve the preceding job's expected C values. New all-one inputs
+        // would produce 8, but reset on the first STORE edge must suppress
+        // that write and leave every old C word intact, including C[0].
+        if (expected[0] == 8)
+            $fatal(1, "Reset-preservation test needs old C[0] different from 8");
+        for (integer i = 0; i < 64; i = i + 1) begin
+            matrix_a[i] = 8'sd1;
+            matrix_b[i] = 8'sd1;
+        end
+        load_operands();
+        begin_job("reset before first C write");
+        repeat (17) begin // CLEAR + eight READ/MAC pairs, now in STORE.
+            @(negedge clk);
+            idle_requests();
+            tick();
+            check_status(1'b1, 1'b0, "before suppressed C write");
+        end
+        reset_core();
+        for (integer i = 0; i < 64; i = i + 1)
+            read_result(i, "C contents survive reset", 1'b0);
+        $display("PASS: reset suppresses STORE and preserves C contents/output");
+
         // Abort in CLEAR, READ, MAC, the first STORE, and the final STORE.
         reset_offsets[0] = 0;
         reset_offsets[1] = 1;
@@ -279,13 +344,18 @@ module tb_gemm;
         calculate_expected();
         begin_job("held start first job");
         finish_job("held start first job", 1'b0, 1'b1);
-        // All 64 asynchronous reads fit before the next rising edge (6.4 ns).
-        for (integer i = 0; i < 64; i = i + 1) begin
-            c_rd_addr = i[5:0];
-            #0.1;
-            check_output(i, "held start first job");
-        end
-        tick();
+        // Only one synchronous read fits on the idle edge that accepts the
+        // held start. Read the final word, just stored at the previous edge.
+        // The full matrix is checked after the second job with start low.
+        @(negedge clk);
+        previous_read = c_rd_data;
+        c_rd_addr = 6'd63;
+        #1;
+        check_read_data(previous_read, "held start: before read/restart edge");
+        @(posedge clk);
+        check_read_data(previous_read, "held start: at read/restart edge");
+        #1;
+        check_output(63, "held start first job: final word");
         check_status(1'b1, 1'b0, "held start restarts after completion");
         finish_job("held start second job", 1'b0, 1'b0);
         check_results("held start second job");

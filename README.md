@@ -18,13 +18,13 @@ Details about each RTL mini-project and the tools I've used:
 
 ## Current milestone
 
-GEMM now stores A and B in separate instances of a reusable synchronous SRAM
-module. Both memories register their read outputs, which feed the signed MAC
-inputs without another register stage. The calculation still takes 1,152 cycles
-after accepting `start`.
+GEMM stores A, B, and C in separate instances of a reusable synchronous SRAM
+module: 64 × 8 for each input matrix and 64 × 32 for results. The calculation
+still takes 1,152 cycles after accepting `start`.
 
-C remains an internal array with asynchronous result reads. Moving C storage
-into a memory module is the next planned step.
+After `done`, keep `start` low and select `c_rd_addr` before an idle rising edge.
+The selected result appears on `c_rd_data` after that edge's updates. The output
+holds during computation and reset.
 
 Run the standalone memory checks and GEMM regression from the project root:
 

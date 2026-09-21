@@ -22,19 +22,9 @@ module gemm (
     output logic signed [31:0] c_rd_data // 32-bit signed output matrix read data
 );
 
-    logic signed [31:0] C [0:63]; // (output matrix) 32-bits per 64 elements stored in a 1D array
     logic [7:0] row;
     logic [7:0] column;
     logic [7:0] k;
-
-    typedef enum logic [2:0] {
-        IDLE,
-        CLEAR,
-        READ,
-        MAC,
-        STORE
-    } state_t;
-    state_t state;
 
     logic [5:0] a_mem_addr;
     logic [7:0] a_mem_rdata;
@@ -46,11 +36,25 @@ module gemm (
     logic b_mem_we;
     logic b_mem_re;
 
+    logic [5:0] c_mem_addr;
+    logic [31:0] c_mem_rdata;
+    logic c_mem_we;
+    logic c_mem_re;
+
     logic mac_clear;
     logic mac_enable;
     logic signed [7:0] mac_a;
     logic signed [7:0] mac_b;
     logic signed [31:0] mac_acc;
+
+    typedef enum logic [2:0] {
+        IDLE,
+        CLEAR,
+        READ,
+        MAC,
+        STORE
+    } state_t;
+    state_t state;
 
     mac mac_instance (
         .clk(clk),
@@ -86,21 +90,37 @@ module gemm (
         .wdata(b_wdata)
     );
 
+    sram #(
+        .DATA_WIDTH(32),
+        .DEPTH(64)
+    ) sram_c_instance (
+        .clk(clk),
+        .re(c_mem_re),
+        .we(c_mem_we),
+        .addr(c_mem_addr),
+        .rdata(c_mem_rdata),
+        .wdata(mac_acc)
+    );
+
     assign a_mem_we = !reset && (state == IDLE) && a_we;
     assign a_mem_re = !reset && (state == READ);
     assign a_mem_addr = (state == IDLE) ? a_addr : (row * 8 + k);
+    assign mac_a = $signed(a_mem_rdata);
 
     assign b_mem_we = !reset && (state == IDLE) && b_we;
     assign b_mem_re = !reset && (state == READ);
     assign b_mem_addr = (state == IDLE) ? b_addr : (k * 8 + column);
-
-    assign mac_a = $signed(a_mem_rdata);
     assign mac_b = $signed(b_mem_rdata);
-    assign mac_clear = (state == CLEAR);     // assert mac_clear only in CLEAR state
-    assign mac_enable = (state == MAC);      // assert mac_enable only in MAC state
-    assign busy = (state != IDLE);           // assert busy whenever the controller is outside IDLE
-    assign c_rd_data = C[c_rd_addr];         // asynchronously read the selected result element
 
+    assign c_mem_we = !reset && (state == STORE);
+    assign c_mem_re = !reset && (state == IDLE);
+    assign c_mem_addr = (state == IDLE) ? c_rd_addr : (row * 8 + column);
+    assign c_rd_data = $signed(c_mem_rdata);
+
+    assign mac_clear = (state == CLEAR);
+    assign mac_enable = (state == MAC);
+    assign busy = (state != IDLE);
+    
 
     always_ff @(posedge clk) begin
         if (reset) begin
@@ -139,8 +159,6 @@ module gemm (
                 end
 
                 STORE: begin // save the completed dot product at C[row][column]
-                    C[(row * 8) + column] <= mac_acc;
-
                     if (column < 8'd7) begin
                         column <= column + 8'd1;
                         state <= CLEAR;
