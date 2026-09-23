@@ -33,8 +33,8 @@ block at that same edge sees the previous output. Address changes between
 edges do not change `rdata`.
 
 There is no reset or initialization: unwritten words and initial `rdata` are
-unknown in simulation. GEMM reset disables memory operations, preserving data.
-Bits are unsigned in storage; GEMM uses `$signed` for INT8 operands and INT32 results.
+unknown in simulation. [GEMM's memory wrapper](gemm.md) gates operations during reset.
+It preserves stored bits and uses `$signed` for INT8 operands and INT32 results.
 
 Use `DATA_WIDTH >= 1`, `DEPTH >= 2`, and addresses below `DEPTH`. Physical memory
 mapping depends on the synthesis target and tools.

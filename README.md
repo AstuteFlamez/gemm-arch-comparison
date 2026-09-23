@@ -18,9 +18,12 @@ Details about each RTL mini-project and the tools I've used:
 
 ## Current milestone
 
-GEMM stores A, B, and C in separate instances of a reusable synchronous SRAM
-module: 64 × 8 for each input matrix and 64 × 32 for results. The calculation
-still takes 1,152 cycles after accepting `start`.
+`gemm` now connects three modules: `gemm_controller`, `gemm_memory`, and `mac`.
+The controller owns the FSM, counters, compute addresses, operation requests,
+start acceptance, busy, and done. The memory wrapper owns A/B (64 × 8 each) and
+C (64 × 32) SRAMs, host/compute routing, reset gating, and signed read conversions.
+One MAC performs the arithmetic. The public interface is unchanged, and each
+calculation still takes 1,152 cycles after accepting `start`.
 
 After `done`, keep `start` low and select `c_rd_addr` before an idle rising edge.
 The selected result appears on `c_rd_data` after that edge's updates. The output
@@ -33,11 +36,15 @@ make test-sram
 make test-gemm
 ```
 
+Icarus passes 464 and 122 SRAM checks, plus 38 GEMM jobs and 2,433 output
+comparisons. Both GEMM build targets include the controller and memory wrapper.
+VCS has not been run for this integration.
+
 ## Repository layout
 
 ```text
 .
-├── rtl/       # SystemVerilog RTL: MAC, GEMV, GEMM, and SRAM
+├── rtl/       # MAC, GEMV, GEMM, SRAM, GEMM controller and memory wrapper
 ├── tb/        # SystemVerilog testbenches
 ├── tests/     # Python reference model, vector generator, and tests
 ├── scripts/   # Environment checks and Synopsys library inspection

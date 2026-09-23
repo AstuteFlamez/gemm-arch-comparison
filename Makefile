@@ -87,14 +87,14 @@ test-gemv-full-vcs: vectors
 
 gemm-compile:
 	@mkdir -p build/gemm
-	$(IVERILOG) -g2012 -Wall -s tb_gemm -o build/gemm/gemm.vvp rtl/mac.sv rtl/sram.sv rtl/gemm.sv tb/tb_gemm.sv > build/gemm/compile.log 2>&1 || { cat build/gemm/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_gemm -o build/gemm/gemm.vvp rtl/mac.sv rtl/sram.sv rtl/gemm_memory.sv rtl/gemm_controller.sv rtl/gemm.sv tb/tb_gemm.sv > build/gemm/compile.log 2>&1 || { cat build/gemm/compile.log; exit 1; }
 
 test-gemm: gemm-compile
 	cd build/gemm && $(VVP) -l run.log gemm.vvp
 
 test-gemm-vcs:
 	@mkdir -p build/gemm/vcs
-	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm ../../../rtl/mac.sv ../../../rtl/sram.sv ../../../rtl/gemm.sv ../../../tb/tb_gemm.sv -o simv -l compile.log
+	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm ../../../rtl/mac.sv ../../../rtl/sram.sv ../../../rtl/gemm_memory.sv ../../../rtl/gemm_controller.sv ../../../rtl/gemm.sv ../../../tb/tb_gemm.sv -o simv -l compile.log
 	cd build/gemm/vcs && ./simv -l run.log
 
 sram-compile:

@@ -22,39 +22,17 @@ module gemm (
     output logic signed [31:0] c_rd_data // 32-bit signed output matrix read data
 );
 
-    logic [7:0] row;
-    logic [7:0] column;
-    logic [7:0] k;
-
-    logic [5:0] a_mem_addr;
-    logic [7:0] a_mem_rdata;
-    logic a_mem_we;
-    logic a_mem_re;
-
-    logic [5:0] b_mem_addr;
-    logic [7:0] b_mem_rdata;
-    logic b_mem_we;
-    logic b_mem_re;
-
-    logic [5:0] c_mem_addr;
-    logic [31:0] c_mem_rdata;
-    logic c_mem_we;
-    logic c_mem_re;
-
     logic mac_clear;
     logic mac_enable;
     logic signed [7:0] mac_a;
     logic signed [7:0] mac_b;
     logic signed [31:0] mac_acc;
 
-    typedef enum logic [2:0] {
-        IDLE,
-        CLEAR,
-        READ,
-        MAC,
-        STORE
-    } state_t;
-    state_t state;
+    logic [5:0] a_compute_addr;
+    logic [5:0] b_compute_addr;
+    logic [5:0] c_compute_addr;
+    logic compute_re;
+    logic c_compute_we;
 
     mac mac_instance (
         .clk(clk),
@@ -66,119 +44,44 @@ module gemm (
         .acc(mac_acc)
     );
 
-    sram #(
-        .DATA_WIDTH(8),
-        .DEPTH(64)
-    ) sram_a_instance (
+    gemm_memory sram_instance (
         .clk(clk),
-        .re(a_mem_re),
-        .we(a_mem_we),
-        .addr(a_mem_addr),
-        .rdata(a_mem_rdata),
-        .wdata(a_wdata)
+        .reset(reset),
+        .busy(busy),
+        .a_we(a_we),
+        .a_addr(a_addr),
+        .a_wdata(a_wdata),
+        .b_we(b_we),
+        .b_addr(b_addr),
+        .b_wdata(b_wdata),
+        .c_rd_addr(c_rd_addr),
+        .c_rd_data(c_rd_data),
+        .compute_re(compute_re),
+        .a_compute_addr(a_compute_addr),
+        .b_compute_addr(b_compute_addr),
+        .c_compute_we(c_compute_we),
+        .c_compute_addr(c_compute_addr),
+        .a_compute_data(mac_a),
+        .b_compute_data(mac_b),
+        .c_compute_wdata(mac_acc)
     );
 
-    sram #(
-        .DATA_WIDTH(8),
-        .DEPTH(64)
-    ) sram_b_instance (
+    gemm_controller controller_instance (
         .clk(clk),
-        .re(b_mem_re),
-        .we(b_mem_we),
-        .addr(b_mem_addr),
-        .rdata(b_mem_rdata),
-        .wdata(b_wdata)
+        .reset(reset),
+        .start(start),
+        .a_we(a_we),
+        .b_we(b_we),
+        .busy(busy),
+        .done(done),
+        .compute_re(compute_re),
+        .c_compute_we(c_compute_we),
+        .mac_clear(mac_clear),
+        .mac_enable(mac_enable),
+        .a_compute_addr(a_compute_addr),
+        .b_compute_addr(b_compute_addr),
+        .c_compute_addr(c_compute_addr)
     );
-
-    sram #(
-        .DATA_WIDTH(32),
-        .DEPTH(64)
-    ) sram_c_instance (
-        .clk(clk),
-        .re(c_mem_re),
-        .we(c_mem_we),
-        .addr(c_mem_addr),
-        .rdata(c_mem_rdata),
-        .wdata(mac_acc)
-    );
-
-    assign a_mem_we = !reset && (state == IDLE) && a_we;
-    assign a_mem_re = !reset && (state == READ);
-    assign a_mem_addr = (state == IDLE) ? a_addr : (row * 8 + k);
-    assign mac_a = $signed(a_mem_rdata);
-
-    assign b_mem_we = !reset && (state == IDLE) && b_we;
-    assign b_mem_re = !reset && (state == READ);
-    assign b_mem_addr = (state == IDLE) ? b_addr : (k * 8 + column);
-    assign mac_b = $signed(b_mem_rdata);
-
-    assign c_mem_we = !reset && (state == STORE);
-    assign c_mem_re = !reset && (state == IDLE);
-    assign c_mem_addr = (state == IDLE) ? c_rd_addr : (row * 8 + column);
-    assign c_rd_data = $signed(c_mem_rdata);
-
-    assign mac_clear = (state == CLEAR);
-    assign mac_enable = (state == MAC);
-    assign busy = (state != IDLE);
-    
-
-    always_ff @(posedge clk) begin
-        if (reset) begin
-            state <= IDLE;
-            row <= 8'd0;
-            column <= 8'd0;
-            k <= 8'd0;
-            done <= 1'b0;
-        end else begin
-            case (state)
-                IDLE: begin
-                    if (start && !a_we && !b_we) begin // accept start only when neither write enable is high
-                        row <= 8'd0;
-                        column <= 8'd0;
-                        done <= 1'b0;
-                        state <= CLEAR;
-                    end
-                end
-
-                CLEAR: begin // clear the MAC's accumulator at this edge, then advance to READ for the next edge
-                    k <= 8'd0;
-                    state <= READ;
-                end
-
-                READ: begin // register operands for the following MAC edge
-                    state <= MAC;
-                end
-
-                MAC: begin // the MAC instance accumulates the registered operands at this edge
-                    if (k < 8'd7) begin
-                        k <= k + 8'd1;
-                        state <= READ;
-                    end else begin
-                        state <= STORE;
-                    end
-                end
-
-                STORE: begin // save the completed dot product at C[row][column]
-                    if (column < 8'd7) begin
-                        column <= column + 8'd1;
-                        state <= CLEAR;
-                    end else if (row < 8'd7) begin
-                        column <= 8'd0;
-                        row <= row + 8'd1;
-                        state <= CLEAR;
-                    end else begin
-                        done <= 1'b1;
-                        state <= IDLE;
-                    end
-                end
-
-                default: begin
-                    state <= IDLE;
-                end
-            endcase
-        end
-    end
-
 
 endmodule
 
