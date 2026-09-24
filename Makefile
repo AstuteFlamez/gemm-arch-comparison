@@ -7,6 +7,7 @@ SEED ?= 20260917
 RANDOM_COUNT ?= 100
 
 .PHONY: help env smoke smoke-vcs test-python vectors mac-compile test-mac test-mac-vcs gemv-compile test-gemv test-gemv-vcs test-gemv-full test-gemv-full-vcs gemm-compile test-gemm test-gemm-vcs sram-compile test-sram check
+.PHONY: gemm-controller-compile test-gemm-controller test-gemm-controller-vcs
 
 help:
 	@printf '%s\n' \
@@ -27,6 +28,9 @@ help:
 	  '  make gemm-compile Compile the GEMM core and its testbench' \
 	  '  make test-gemm    Run GEMM arithmetic and control checks locally' \
 	  '  make test-gemm-vcs Run GEMM checks on a configured VCS machine' \
+	  '  make gemm-controller-compile Compile standalone GEMM controller checks' \
+	  '  make test-gemm-controller Run controller sequencing and protocol checks' \
+	  '  make test-gemm-controller-vcs Run standalone controller checks with VCS' \
 	  '  make sram-compile Compile standalone SRAM checks in two configurations' \
 	  '  make test-sram    Run standalone SRAM checks (64x8 and 7x16)' \
 	  '  make check       Run env, local smoke, and Python checks' \
@@ -96,6 +100,18 @@ test-gemm-vcs:
 	@mkdir -p build/gemm/vcs
 	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm ../../../rtl/mac.sv ../../../rtl/sram.sv ../../../rtl/gemm_memory.sv ../../../rtl/gemm_controller.sv ../../../rtl/gemm.sv ../../../tb/tb_gemm.sv -o simv -l compile.log
 	cd build/gemm/vcs && ./simv -l run.log
+
+gemm-controller-compile:
+	@mkdir -p build/gemm-controller
+	$(IVERILOG) -g2012 -Wall -s tb_gemm_controller -o build/gemm-controller/controller.vvp rtl/gemm_controller.sv tb/tb_gemm_controller.sv > build/gemm-controller/compile.log 2>&1 || { cat build/gemm-controller/compile.log; exit 1; }
+
+test-gemm-controller: gemm-controller-compile
+	cd build/gemm-controller && $(VVP) -l run.log controller.vvp
+
+test-gemm-controller-vcs:
+	@mkdir -p build/gemm-controller/vcs
+	cd build/gemm-controller/vcs && $(VCS) -full64 -sverilog -top tb_gemm_controller ../../../rtl/gemm_controller.sv ../../../tb/tb_gemm_controller.sv -o simv -l compile.log
+	cd build/gemm-controller/vcs && ./simv -l run.log
 
 sram-compile:
 	@mkdir -p build/sram

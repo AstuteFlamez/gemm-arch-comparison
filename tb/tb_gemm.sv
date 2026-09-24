@@ -274,7 +274,8 @@ module tb_gemm;
             run_job($sformatf("seeded random %0d", test_index), 1'b0);
         end
 
-        // A writes, B writes, and simultaneous writes each take priority over start.
+        // Start accepts A-only, B-only, and simultaneous final writes on the
+        // same idle edge. The calculation must use those newly written values.
         for (integer mode = 1; mode <= 3; mode = mode + 1) begin
             set_patterned_inputs();
             load_operands();
@@ -287,14 +288,12 @@ module tb_gemm;
             a_wdata = 8'sd77;
             b_wdata = -8'sd33;
             tick();
-            check_status(1'b0, 1'b1, "writes take priority over start");
+            check_status(1'b1, 1'b0, "start accepted alongside final writes");
             if (a_we) matrix_a[0] = a_wdata;
             if (b_we) matrix_b[0] = b_wdata;
-            @(negedge clk);
-            idle_requests();
-            tick();
-            check_status(1'b0, 1'b1, "rejected start is not queued");
-            run_job($sformatf("write/start collision %0d", mode), 1'b0);
+            calculate_expected();
+            finish_job($sformatf("start with final writes %0d", mode), 1'b0, 1'b0);
+            check_results($sformatf("start with final writes %0d", mode));
         end
 
         // Preserve the preceding job's expected C values. New all-one inputs

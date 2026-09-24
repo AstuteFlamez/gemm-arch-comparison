@@ -24,7 +24,7 @@ module gemm_controller(
     logic [7:0] column;
     logic [7:0] k;
 
-    typedef enum logic [2:0] {
+    typedef enum logic [2:0] { // 5 states so we need a 3-bit state machine
         IDLE,
         CLEAR,
         READ,
@@ -36,15 +36,15 @@ module gemm_controller(
     assign a_compute_addr = row * 8 + k;
     assign b_compute_addr = k * 8 + column;
     assign c_compute_addr = row * 8 + column;
-    assign compute_re = (state == READ);
-    assign c_compute_we = (state == STORE);
-    assign mac_clear = (state == CLEAR);
-    assign mac_enable = (state == MAC);
-    assign busy = (state != IDLE);
+    assign compute_re = (state == READ);      // in READ, enable A/B memory reads
+    assign c_compute_we = (state == STORE);   // in STORE, enable writing completed MAC to memory
+    assign mac_clear = (state == CLEAR);      // in CLEAR, zero MAC accumulator
+    assign mac_enable = (state == MAC);       // in MAC, do MAC
+    assign busy = (state != IDLE);            // set busy HIGH when not in IDLE-mode (useful for other files to checkup on progress)
 
     always_ff @(posedge clk) begin
-        if (reset) begin
-            state <= IDLE;
+        if (reset) begin   // reset all values to 0
+            state <= IDLE; 
             row <= 8'd0;
             column <= 8'd0;
             k <= 8'd0;
@@ -52,7 +52,7 @@ module gemm_controller(
         end else begin
             case (state)
                 IDLE: begin
-                    if (start && !a_we && !b_we) begin // accept start only when neither write enable is high
+                    if (start) begin
                         row <= 8'd0;
                         column <= 8'd0;
                         done <= 1'b0;
@@ -60,18 +60,18 @@ module gemm_controller(
                     end
                 end
 
-                CLEAR: begin // clear the MAC's accumulator at this edge, then advance to READ for the next edge
+                CLEAR: begin // clear MAC accumalator and k
                     k <= 8'd0;
                     state <= READ;
                 end
 
-                READ: begin // register operands for the following MAC edge
+                READ: begin // enable A/B memory reads
                     state <= MAC;
                 end
 
                 MAC: begin // the MAC instance accumulates the registered operands at this edge
                     if (k < 8'd7) begin
-                        k <= k + 8'd1;
+                        k <= k + 8'd1;  // increment K
                         state <= READ;
                     end else begin
                         state <= STORE;

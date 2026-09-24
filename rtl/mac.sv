@@ -14,13 +14,11 @@ module mac (
     logic signed [15:0] product;
     logic signed [31:0] product_extended;
 
-    assign product = a * b;
-    assign product_extended = { {16{product[15]}}, product };
+    assign product = a * b; // 8 bits * 8 bits = NEED 16 bits
+    assign product_extended = { {16{product[15]}}, product }; // 16 sign-extended bits, 16 original product bits
 
     always_ff @(posedge clk) begin
-        if (reset) begin
-            acc <= 32'sd0;
-        end else if (clear) begin
+        if (reset || clear) begin
             acc <= 32'sd0;
         end else if (enable) begin
             acc <= acc + product_extended;

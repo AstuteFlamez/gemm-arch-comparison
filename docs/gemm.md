@@ -34,7 +34,8 @@ Before a READ edge, addresses and read requests select operands; after that edge
 SRAM outputs hold the operands. The following MAC edge consumes them directly.
 STORE writes C. Each output takes 18 cycles; a job takes 1,152 after accepting start.
 
-Load A/B in IDLE; accept `start` only with reset low and neither `a_we` nor `b_we` high.
+Load A/B in IDLE; accept `start` with reset low, including on the same edge as
+an A/B write. Those final writes complete before computation reads the operands.
 Busy host requests are ignored. `done` holds until reset or an accepted start.
 At a rising edge, reset returns any state to IDLE and clears counters, done, and MAC.
 Reset also gates memory operations, preserving stored data and SRAM read outputs.
