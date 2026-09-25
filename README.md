@@ -1,53 +1,88 @@
 # RTL Learning Projects
 
-I use these mini-projects to practice RTL design and verification. I write the RTL
-myself. For verification, I work with ChatGPT to think through edge cases
-and write tests together.
+Small SystemVerilog projects building toward an 8×8 GEMM using a 2×2 systolic array.
 
-I've also used these projects to learn Synopsys tools, including VCS, Verdi,
-and Design Compiler.
+## GEMM architecture
 
-## Documentation
+Planned architecture; the current GEMM still uses one MAC. Boxes show which
+modules belong together. Solid arrows show data flow; dashed arrows show control.
+Completion handshakes are omitted for clarity.
 
-Details about each RTL mini-project and the tools I've used:
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#C5050C", "primaryTextColor": "#FFFFFF", "primaryBorderColor": "#9B0000", "clusterBkg": "#FFF5F5", "clusterBorder": "#C5050C", "lineColor": "#C5050C", "textColor": "#282728", "edgeLabelBackground": "#FFFFFF"}}}%%
+flowchart TB
+    subgraph GEMM["gemm.sv"]
+        CTRL["top_level_controller.sv"]
 
-- [MAC exercise](docs/mac.md)
-- [GEMV exercise](docs/gemv.md)
-- [GEMM exercise](docs/gemm.md)
-- [SRAM exercise](docs/sram.md)
+        subgraph MEMORY["memory_wrapper.sv"]
+            SRAM["sram.sv × 3 — A, B, C"]
+        end
 
-## Current milestone
+        MC["memory_controller.sv"]
 
-`gemm` now connects three modules: `gemm_controller`, `gemm_memory`, and `mac`.
-The controller owns the FSM, counters, compute addresses, operation requests,
-start acceptance, busy, and done. The memory wrapper owns A/B (64 × 8 each) and
-C (64 × 32) SRAMs, host/compute routing, reset gating, and signed read conversions.
-One MAC performs the arithmetic. The public interface is unchanged, and each
-calculation still takes 1,152 cycles after accepting `start`.
+        subgraph FEEDER["operand_feeder.sv"]
+            FIFO["fifo.sv × 4"]
+        end
 
-After `done`, keep `start` low and select `c_rd_addr` before an idle rising edge.
-The selected result appears on `c_rd_data` after that edge's updates. The output
-holds during computation and reset.
+        subgraph ARRAY["systolic_array.sv — 2×2"]
+            subgraph PE["systolic_pe.sv × 4"]
+                MAC["mac.sv — one per PE"]
+            end
+        end
 
-Run the standalone memory checks and GEMM regression from the project root:
+        CTRL -.-> MC
+        CTRL -.-> FEEDER
+        CTRL -.-> ARRAY
+        MEMORY <-->|A/B reads, C writes| MC
+        MC -->|Load operands| FEEDER
+        FEEDER -->|Staggered A/B| ARRAY
+        ARRAY -->|Four results| MC
+    end
 
-```sh
-make test-sram
-make test-gemm
+    classDef component fill:#C5050C,stroke:#9B0000,color:#FFFFFF
+    class CTRL,SRAM,MC,FIFO,MAC component
+    style GEMM fill:#FFF5F5,stroke:#C5050C,color:#9B0000
+    style MEMORY fill:#FFFFFF,stroke:#C5050C,color:#9B0000
+    style FEEDER fill:#FFFFFF,stroke:#C5050C,color:#9B0000
+    style ARRAY fill:#FFFFFF,stroke:#C5050C,color:#9B0000
+    style PE fill:#FFF5F5,stroke:#C5050C,color:#9B0000
+    linkStyle default stroke:#C5050C,color:#9B0000
 ```
 
-Icarus passes 464 and 122 SRAM checks, plus 38 GEMM jobs and 2,433 output
-comparisons. Both GEMM build targets include the controller and memory wrapper.
-VCS has not been run for this integration.
+## Implementation order
+
+| Status | File | Done / remaining work |
+| --- | --- | --- |
+| DONE | [mac.sv](rtl/mac.sv) | Signed multiply-accumulate |
+| DONE | [sram.sv](rtl/sram.sv) | Parameterized synchronous memory |
+| IN-PROGRESS | [memory_wrapper.sv](rtl/memory_wrapper.sv) | Storage exists; finish module rename |
+| IN-PROGRESS | [fifo.sv](rtl/fifo.sv) | Fixed 4×8 works; parameterize width/depth |
+| NEXT | [systolic_pe.sv](rtl/systolic_pe.sv) | Forward A/B and validity; wrap one MAC |
+| NEXT | [systolic_array.sv](rtl/systolic_array.sv) | Connect four PEs; verify one output tile |
+| NEXT | [operand_feeder.sv](rtl/operand_feeder.sv) | Four FIFOs; stagger operands and validity |
+| NEXT | [memory_controller.sv](rtl/memory_controller.sv) | Load FIFOs from SRAM; write four results |
+| NEXT | [top_level_controller.sv](rtl/top_level_controller.sv) | Replace scalar sequencing with tile phases |
+| NEXT | [gemm.sv](rtl/gemm.sv) | Integrate blocks; verify full 8×8 GEMM |
+| LATER | [gemv.sv](rtl/gemv.sv) | Existing GEMV works; SRAM conversion |
 
 ## Repository layout
 
-```text
-.
-├── rtl/       # MAC, GEMV, GEMM, SRAM, GEMM controller and memory wrapper
-├── tb/        # SystemVerilog testbenches
-├── tests/     # Python reference model, vector generator, and tests
-├── scripts/   # Environment checks and Synopsys library inspection
-├── docs/      # Mini-project documentation
-└── Makefile   # Build and test commands
-```
+<pre>.
+├── <a href="rtl/">rtl/</a>
+│   ├── <a href="rtl/mac.sv">mac.sv</a>
+│   ├── <a href="rtl/sram.sv">sram.sv</a>
+│   ├── <a href="rtl/fifo.sv">fifo.sv</a>
+│   ├── <a href="rtl/systolic_pe.sv">systolic_pe.sv</a>
+│   ├── <a href="rtl/systolic_array.sv">systolic_array.sv</a>
+│   ├── <a href="rtl/operand_feeder.sv">operand_feeder.sv</a>
+│   ├── <a href="rtl/memory_wrapper.sv">memory_wrapper.sv</a>
+│   ├── <a href="rtl/memory_controller.sv">memory_controller.sv</a>
+│   ├── <a href="rtl/top_level_controller.sv">top_level_controller.sv</a>
+│   ├── <a href="rtl/gemm.sv">gemm.sv</a>
+│   └── <a href="rtl/gemv.sv">gemv.sv</a>
+├── <a href="tb/">tb/</a>          # SystemVerilog testbenches
+├── <a href="tests/">tests/</a>       # Python reference model, vectors, and tests
+├── <a href="docs/">docs/</a>        # Design notes
+├── <a href="scripts/">scripts/</a>     # Tool and environment checks
+├── <a href="Makefile">Makefile</a>     # Build and test commands
+└── <a href="README.md">README.md</a></pre>

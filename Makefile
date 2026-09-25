@@ -8,6 +8,7 @@ RANDOM_COUNT ?= 100
 
 .PHONY: help env smoke smoke-vcs test-python vectors mac-compile test-mac test-mac-vcs gemv-compile test-gemv test-gemv-vcs test-gemv-full test-gemv-full-vcs gemm-compile test-gemm test-gemm-vcs sram-compile test-sram check
 .PHONY: gemm-controller-compile test-gemm-controller test-gemm-controller-vcs
+.PHONY: fifo-compile test-fifo test-fifo-vcs test-fifo-configs
 
 help:
 	@printf '%s\n' \
@@ -33,6 +34,10 @@ help:
 	  '  make test-gemm-controller-vcs Run standalone controller checks with VCS' \
 	  '  make sram-compile Compile standalone SRAM checks in two configurations' \
 	  '  make test-sram    Run standalone SRAM checks (64x8 and 7x16)' \
+	  '  make fifo-compile Compile standalone FIFO checks' \
+	  '  make test-fifo    Run FIFO ordering, boundary, reset, and random checks' \
+	  '  make test-fifo-configs Test parameterized RTL at depths 2/4/6/8 and widths 1/8/15/32' \
+	  '  make test-fifo-vcs Run the same FIFO checks with VCS' \
 	  '  make check       Run env, local smoke, and Python checks' \
 	  'make check covers support checks only; run test-mac, test-gemv-full, and test-gemm for RTL.'
 
@@ -121,5 +126,30 @@ sram-compile:
 test-sram: sram-compile
 	cd build/sram && $(VVP) -l run.log sram.vvp
 	cd build/sram && $(VVP) -l run-7x16.log sram-7x16.vvp
+
+fifo-compile:
+	@mkdir -p build/fifo
+	$(IVERILOG) -g2012 -Wall -s tb_fifo -o build/fifo/fifo.vvp rtl/fifo.sv tb/tb_fifo.sv > build/fifo/compile.log 2>&1 || { cat build/fifo/compile.log; exit 1; }
+
+test-fifo: fifo-compile
+	cd build/fifo && $(VVP) -l run.log fifo.vvp +SEED=$(SEED)
+
+test-fifo-configs:
+	@set -e; for depth in 2 4 6 8; do \
+	  for width in 1 8 15 32; do \
+	    out_dir=build/fifo/config-$$depth-x-$$width; \
+	    mkdir -p "$$out_dir"; \
+	    $(IVERILOG) -g2012 -Wall -DFIFO_PARAMETERIZED -s tb_fifo \
+	      -Ptb_fifo.DEPTH=$$depth -Ptb_fifo.DATA_WIDTH=$$width \
+	      -o "$$out_dir/fifo.vvp" rtl/fifo.sv tb/tb_fifo.sv > "$$out_dir/compile.log" 2>&1 \
+	      || { cat "$$out_dir/compile.log"; exit 1; }; \
+	    (cd "$$out_dir" && $(VVP) -l run.log fifo.vvp +SEED=$(SEED)); \
+	  done; \
+	done
+
+test-fifo-vcs:
+	@mkdir -p build/fifo/vcs
+	cd build/fifo/vcs && $(VCS) -full64 -sverilog -top tb_fifo ../../../rtl/fifo.sv ../../../tb/tb_fifo.sv -o simv -l compile.log
+	cd build/fifo/vcs && ./simv -l run.log +SEED=$(SEED)
 
 check: env smoke test-python

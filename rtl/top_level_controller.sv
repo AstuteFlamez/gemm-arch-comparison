@@ -1,3 +1,6 @@
+/*
+TODO: sequence loading, computing, storing each 2x2 output block
+*/
 `timescale 1ns/1ps
 `default_nettype none
 

@@ -1,8 +1,8 @@
+/*
+    TODO: need to interface w/ sram
+*/
 `timescale 1ns/1ps
 `default_nettype none
-
-// TODO: need to interface w/ sram
-
 module gemv (
     input  logic clk,
     input  logic reset,

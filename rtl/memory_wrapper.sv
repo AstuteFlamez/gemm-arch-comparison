@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 `default_nettype none
 
-module gemm_memory(
+module gemm_memory (
     input logic clk,
 
     // control signals
