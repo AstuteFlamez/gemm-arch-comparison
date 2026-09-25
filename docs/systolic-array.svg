@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="850" viewBox="0 0 1120 850" role="img" aria-labelledby="title desc">
+  <title id="title">Planned 2 by 2 systolic GEMM architecture</title>
+  <desc id="desc">Inside gemm.sv, a top level controller sequences a memory controller and A, B, C storage. Two A FIFOs feed the array from the left; two B FIFOs feed it from above. Four PE tiles form a two by two grid. Each PE contains one MAC, passes A right and B down, and keeps one C result. The memory controller loads the FIFOs, staggers their pops, and writes back the four results.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#C5050C"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #282728; }
+    .file { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 17px; }
+    .heading { font-size: 20px; font-weight: 700; }
+    .label { font-size: 16px; }
+    .small { font-size: 14px; }
+    .red { fill: #9B0000; }
+    .white { fill: #FFFFFF; }
+    .box { fill: #FFFFFF; stroke: #C5050C; stroke-width: 2; }
+    .tile { fill: #C5050C; stroke: #9B0000; stroke-width: 2; }
+    .flow { fill: none; stroke: #C5050C; stroke-width: 2.5; marker-end: url(#arrow); }
+    .control { stroke-dasharray: 6 5; }
+  </style>
+  <rect width="1120" height="850" fill="#FFFFFF"/>
+  <rect x="20" y="20" width="1080" height="810" rx="14" fill="#FFF5F5" stroke="#C5050C" stroke-width="2"/>
+  <text x="45" y="53" class="heading red">gemm.sv</text>
+  <text x="1055" y="53" class="label red" text-anchor="end">Planned architecture</text>
+
+  <rect x="50" y="85" width="310" height="76" rx="7" class="box"/>
+  <text x="205" y="115" text-anchor="middle" class="file">top_level_controller.sv</text>
+  <text x="205" y="141" text-anchor="middle" class="small">Sequence tiles and job phases</text>
+
+  <rect x="400" y="85" width="310" height="76" rx="7" class="box"/>
+  <text x="555" y="115" text-anchor="middle" class="file">memory_controller.sv</text>
+  <text x="555" y="141" text-anchor="middle" class="small">Load FIFOs · stagger pops · store C</text>
+
+  <rect x="750" y="70" width="320" height="115" rx="7" class="box"/>
+  <text x="910" y="98" text-anchor="middle" class="file">memory_wrapper.sv</text>
+  <rect x="770" y="112" width="280" height="52" rx="5" fill="#FFF5F5" stroke="#C5050C"/>
+  <text x="910" y="144" text-anchor="middle" class="file">sram.sv × 3 — A, B, C</text>
+  <path d="M 360 123 H 400" class="flow control"/>
+  <path d="M 710 123 H 750" class="flow" marker-start="url(#arrow)"/>
+
+  <rect x="55" y="385" width="215" height="335" rx="9" class="box"/>
+  <text x="162" y="416" text-anchor="middle" class="heading red">A FIFOs</text>
+  <text x="162" y="440" text-anchor="middle" class="file">fifo.sv × 2</text>
+  <rect x="80" y="455" width="165" height="65" rx="6" fill="#FFF5F5" stroke="#C5050C"/>
+  <text x="162" y="483" text-anchor="middle" class="label">A row 0</text>
+  <text x="162" y="505" text-anchor="middle" class="small">A[r, k]</text>
+  <rect x="80" y="610" width="165" height="65" rx="6" fill="#FFF5F5" stroke="#C5050C"/>
+  <text x="162" y="638" text-anchor="middle" class="label">A row 1</text>
+  <text x="162" y="660" text-anchor="middle" class="small">A[r+1, k]</text>
+
+  <rect x="350" y="235" width="540" height="115" rx="9" class="box"/>
+  <text x="620" y="262" text-anchor="middle" class="heading red">B FIFOs — fifo.sv × 2</text>
+  <rect x="395" y="278" width="170" height="55" rx="6" fill="#FFF5F5" stroke="#C5050C"/>
+  <text x="480" y="300" text-anchor="middle" class="label">B column 0</text>
+  <text x="480" y="321" text-anchor="middle" class="small">B[k, c]</text>
+  <rect x="655" y="278" width="170" height="55" rx="6" fill="#FFF5F5" stroke="#C5050C"/>
+  <text x="740" y="300" text-anchor="middle" class="label">B column 1</text>
+  <text x="740" y="321" text-anchor="middle" class="small">B[k, c+1]</text>
+
+  <path d="M 430 161 V 205 H 295 V 302 H 350" class="flow"/>
+  <path d="M 295 302 V 400 H 270" class="flow"/>
+  <circle cx="295" cy="302" r="4" fill="#C5050C"/>
+  <text x="314" y="195" class="small red">Load operands</text>
+
+  <rect x="340" y="390" width="570" height="350" rx="10" class="box"/>
+  <text x="625" y="726" text-anchor="middle" class="file red">systolic_array.sv — 2×2</text>
+
+  <rect x="395" y="440" width="170" height="95" rx="8" class="tile"/>
+  <text x="480" y="470" text-anchor="middle" class="heading white">PE (0, 0)</text>
+  <text x="480" y="495" text-anchor="middle" class="small white">pe.sv · mac.sv</text>
+  <text x="480" y="519" text-anchor="middle" class="label white">C[r, c]</text>
+
+  <rect x="655" y="440" width="170" height="95" rx="8" class="tile"/>
+  <text x="740" y="470" text-anchor="middle" class="heading white">PE (0, 1)</text>
+  <text x="740" y="495" text-anchor="middle" class="small white">pe.sv · mac.sv</text>
+  <text x="740" y="519" text-anchor="middle" class="label white">C[r, c+1]</text>
+
+  <rect x="395" y="595" width="170" height="95" rx="8" class="tile"/>
+  <text x="480" y="625" text-anchor="middle" class="heading white">PE (1, 0)</text>
+  <text x="480" y="650" text-anchor="middle" class="small white">pe.sv · mac.sv</text>
+  <text x="480" y="674" text-anchor="middle" class="label white">C[r+1, c]</text>
+
+  <rect x="655" y="595" width="170" height="95" rx="8" class="tile"/>
+  <text x="740" y="625" text-anchor="middle" class="heading white">PE (1, 1)</text>
+  <text x="740" y="650" text-anchor="middle" class="small white">pe.sv · mac.sv</text>
+  <text x="740" y="674" text-anchor="middle" class="label white">C[r+1, c+1]</text>
+
+  <path d="M 245 487.5 H 395" class="flow"/>
+  <path d="M 245 642.5 H 395" class="flow"/>
+  <path d="M 480 333 V 440" class="flow"/>
+  <path d="M 740 333 V 440" class="flow"/>
+  <path d="M 565 487.5 H 655" class="flow"/>
+  <path d="M 565 642.5 H 655" class="flow"/>
+  <path d="M 480 535 V 595" class="flow"/>
+  <path d="M 740 535 V 595" class="flow"/>
+  <text x="605" y="475" text-anchor="middle" class="label red">A</text>
+  <text x="605" y="630" text-anchor="middle" class="label red">A</text>
+  <text x="494" y="570" class="label red">B</text>
+  <text x="754" y="570" class="label red">B</text>
+
+  <path d="M 910 560 H 1030 V 205 H 680 V 161" class="flow"/>
+  <text x="946" y="520" class="label red">Four C</text>
+  <text x="946" y="542" class="label red">results</text>
+
+  <text x="60" y="778" class="label">A moves right. B moves down. Each PE keeps one C result.</text>
+  <text x="60" y="803" class="small">Second A row and B column start one cycle later. Completion handshakes omitted.</text>
+</svg>

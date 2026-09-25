@@ -1,5 +1,5 @@
 /*
-TODO: connect memory controller, operand feeder, and systolic array
+TODO: instantiate four FIFOs and connect memory controller, FIFOs, and systolic array
 */
 `timescale 1ns/1ps
 `default_nettype none
