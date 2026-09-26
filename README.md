@@ -15,13 +15,19 @@ Planned architecture; the current GEMM still uses one MAC.
 | DONE | [mac.sv](rtl/mac.sv) | Signed multiply-accumulate |
 | DONE | [sram.sv](rtl/sram.sv) | Parameterized synchronous memory |
 | IN-PROGRESS | [memory_wrapper.sv](rtl/memory_wrapper.sv) | Storage exists; finish module rename |
-| IN-PROGRESS | [fifo.sv](rtl/fifo.sv) | Fixed 4×8 works; parameterize width/depth |
+| DONE | [fifo.sv](rtl/fifo.sv) | Parameterized width/depth; pointers wrap at DEPTH-1 |
 | NEXT | [pe.sv](rtl/pe.sv) | Forward A/B and validity; wrap one MAC |
 | NEXT | [systolic_array.sv](rtl/systolic_array.sv) | Connect four PEs; verify one output tile |
 | NEXT | [memory_controller.sv](rtl/memory_controller.sv) | Load four FIFOs; stagger pops and validity; write four results |
 | NEXT | [top_level_controller.sv](rtl/top_level_controller.sv) | Replace scalar sequencing with tile phases |
 | NEXT | [gemm.sv](rtl/gemm.sv) | Connect four FIFOs directly to the array; verify full 8×8 GEMM |
 | LATER | [gemv.sv](rtl/gemv.sv) | Existing GEMV works; SRAM conversion |
+
+FIFO verification: `make test-fifo-configs` passes all 16 combinations of depths
+2/4/6/8 and widths 1/8/15/32, including ordering, pointer wraparound, reset,
+simultaneous operations, and random checks. The `make test-fifo` testbench still
+expects a 4-entry default; its instantiation needs updating for the FIFO's
+8-entry default.
 
 ## Repository layout
 

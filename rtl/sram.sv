@@ -1,12 +1,11 @@
 `timescale 1ns/1ps
 `default_nettype none
 
-module sram 
-    #(
-        parameter int DATA_WIDTH = 8, // bits per element; DEFAULT=8
-        parameter int DEPTH = 64      // number of elements; DEFAULT = 64
-    )
-    (
+module sram #(
+    parameter int DATA_WIDTH = 8, // bits per element; DEFAULT=8
+    parameter int DEPTH = 64      // number of elements; DEFAULT = 64
+)
+(
     input  logic clk,
     input  logic re,
     input  logic we,
