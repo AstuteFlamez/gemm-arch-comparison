@@ -9,8 +9,8 @@ module tb_gemm;
     logic reset = 1'b1;
     logic a_we = 1'b0;
     logic b_we = 1'b0;
-    logic [5:0] a_addr = 6'd0;
-    logic [5:0] b_addr = 6'd0;
+    logic [5:0] a_wr_addr = 6'd0;
+    logic [5:0] b_wr_addr = 6'd0;
     logic signed [7:0] a_wdata = 8'sd0;
     logic signed [7:0] b_wdata = 8'sd0;
     logic start = 1'b0;
@@ -29,8 +29,8 @@ module tb_gemm;
 
     gemm dut (
         .clk(clk), .reset(reset),
-        .a_we(a_we), .a_addr(a_addr), .a_wdata(a_wdata),
-        .b_we(b_we), .b_addr(b_addr), .b_wdata(b_wdata),
+        .a_we(a_we), .a_wr_addr(a_wr_addr), .a_wdata(a_wdata),
+        .b_we(b_we), .b_wr_addr(b_wr_addr), .b_wdata(b_wdata),
         .start(start), .busy(busy), .done(done),
         .c_rd_addr(c_rd_addr), .c_rd_data(c_rd_data)
     );
@@ -112,8 +112,8 @@ module tb_gemm;
             start = 1'b0;
             a_we = 1'b1;
             b_we = 1'b1;
-            a_addr = i[5:0];
-            b_addr = i[5:0];
+            a_wr_addr = i[5:0];
+            b_wr_addr = i[5:0];
             a_wdata = matrix_a[i];
             b_wdata = matrix_b[i];
             tick();
@@ -145,8 +145,8 @@ module tb_gemm;
             start = busy_noise || hold_start;
             a_we = busy_noise;
             b_we = busy_noise;
-            a_addr = 6'd0;
-            b_addr = 6'd0;
+            a_wr_addr = 6'd0;
+            b_wr_addr = 6'd0;
             a_wdata = 8'sd127;
             b_wdata = -8'sd128;
             // Host address changes must not disturb reads or STORE addresses.
@@ -283,8 +283,8 @@ module tb_gemm;
             start = 1'b1;
             a_we = (mode != 2);
             b_we = (mode != 1);
-            a_addr = 6'd0;
-            b_addr = 6'd0;
+            a_wr_addr = 6'd0;
+            b_wr_addr = 6'd0;
             a_wdata = 8'sd77;
             b_wdata = -8'sd33;
             tick();

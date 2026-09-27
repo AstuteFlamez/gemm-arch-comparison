@@ -16,9 +16,9 @@ module tb_gemm_controller;
     logic c_compute_we;
     logic mac_clear;
     logic mac_enable;
-    logic [5:0] a_compute_addr;
-    logic [5:0] b_compute_addr;
-    logic [5:0] c_compute_addr;
+    logic [5:0] a_rd_addr;
+    logic [5:0] b_rd_addr;
+    logic [5:0] c_wr_addr;
 
     integer checks = 0;
     integer completed_jobs = 0;
@@ -33,8 +33,8 @@ module tb_gemm_controller;
         .busy(busy), .done(done),
         .compute_re(compute_re), .c_compute_we(c_compute_we),
         .mac_clear(mac_clear), .mac_enable(mac_enable),
-        .a_compute_addr(a_compute_addr), .b_compute_addr(b_compute_addr),
-        .c_compute_addr(c_compute_addr)
+        .a_rd_addr(a_rd_addr), .b_rd_addr(b_rd_addr),
+        .c_wr_addr(c_wr_addr)
     );
 
     always #5 clk = ~clk;
@@ -60,7 +60,7 @@ module tb_gemm_controller;
 
     task automatic check_reset(input string label_text);
         check_idle(1'b0, label_text);
-        if ({a_compute_addr, b_compute_addr, c_compute_addr} !== 18'd0)
+        if ({a_rd_addr, b_rd_addr, c_wr_addr} !== 18'd0)
             $fatal(1, "%s: compute addresses must be zero after reset", label_text);
         checks = checks + 1;
     endtask
@@ -94,9 +94,9 @@ module tb_gemm_controller;
         check_controls(1'b1, 1'b0, wanted_operations, context_text);
 
         wanted_c = output_index;
-        if (c_compute_addr !== wanted_c)
+        if (c_wr_addr !== wanted_c)
             $fatal(1, "%s: expected C address %0d, got %0d",
-                   context_text, wanted_c, c_compute_addr);
+                   context_text, wanted_c, c_wr_addr);
         checks = checks + 1;
 
         // A/B addresses matter during READ and remain on the same pair in MAC.
@@ -105,9 +105,9 @@ module tb_gemm_controller;
             pair_index = (slot - 1) / 2;
             wanted_a = (output_index / 8) * 8 + pair_index;
             wanted_b = pair_index * 8 + (output_index % 8);
-            if (a_compute_addr !== wanted_a || b_compute_addr !== wanted_b)
+            if (a_rd_addr !== wanted_a || b_rd_addr !== wanted_b)
                 $fatal(1, "%s: expected A/B addresses %0d/%0d, got %0d/%0d",
-                       context_text, wanted_a, wanted_b, a_compute_addr, b_compute_addr);
+                       context_text, wanted_a, wanted_b, a_rd_addr, b_rd_addr);
             checks = checks + 1;
         end
     endtask

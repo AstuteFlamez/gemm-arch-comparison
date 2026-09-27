@@ -18,9 +18,9 @@ module gemm_controller(
     output logic mac_clear,
     output logic mac_enable,
 
-    output logic [5:0] a_compute_addr,
-    output logic [5:0] b_compute_addr,
-    output logic [5:0] c_compute_addr
+    output logic [5:0] a_rd_addr,
+    output logic [5:0] b_rd_addr,
+    output logic [5:0] c_wr_addr
 );
 
     logic [7:0] row;
@@ -36,9 +36,9 @@ module gemm_controller(
     } state_t;
     state_t state;
 
-    assign a_compute_addr = row * 8 + k;
-    assign b_compute_addr = k * 8 + column;
-    assign c_compute_addr = row * 8 + column;
+    assign a_rd_addr = row * 8 + k;
+    assign b_rd_addr = k * 8 + column;
+    assign c_wr_addr = row * 8 + column;
     assign compute_re = (state == READ);      // in READ, enable A/B memory reads
     assign c_compute_we = (state == STORE);   // in STORE, enable writing completed MAC to memory
     assign mac_clear = (state == CLEAR);      // in CLEAR, zero MAC accumulator

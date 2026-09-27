@@ -14,11 +14,11 @@ module gemm (
     - C holds 32-bit signed results
     */
     input  logic a_we,                 // A matrix write enable
-    input  logic [5:0] a_addr,         // 6-bit address for A matrix (64 elements)
+    input  logic [5:0] a_wr_addr,      // 6-bit write address for A matrix (64 elements)
     input  logic signed [7:0] a_wdata, // 8-bit signed A matrix write data
     
     input  logic b_we,                 // B matrix write enable
-    input  logic [5:0] b_addr,         // 6-bit address for B matrix (64 elements)
+    input  logic [5:0] b_wr_addr,      // 6-bit write address for B matrix (64 elements)
     input  logic signed [7:0] b_wdata, // 8-bit signed B matrix write data
 
     // control signals
@@ -36,9 +36,9 @@ module gemm (
     logic signed [7:0] mac_b;    // MAC b value
     logic signed [31:0] mac_acc; // MAC accumualator
 
-    logic [5:0] a_compute_addr;  // A element to read
-    logic [5:0] b_compute_addr;  // B element to read
-    logic [5:0] c_compute_addr;  // C element to write
+    logic [5:0] a_rd_addr;       // A element to read
+    logic [5:0] b_rd_addr;       // B element to read
+    logic [5:0] c_wr_addr;       // C element to write
     logic compute_re;            // A/B read enable
     logic c_compute_we;          // C write enable
 
@@ -52,26 +52,29 @@ module gemm (
         .acc(mac_acc)
     );
 
-    gemm_memory sram_instance (
+    memory_wrapper memory_instance (
         .clk(clk),
         .reset(reset),
         .busy(busy),
+        .ab_re(compute_re),
+
         .a_we(a_we),
-        .a_addr(a_addr),
-        .a_wdata(a_wdata),
+        .a_wr_addr(a_wr_addr),
+        .a_wr_data(a_wdata),
+        .a_rd_addr(a_rd_addr),
+        .a_rd_data(mac_a),
+
         .b_we(b_we),
-        .b_addr(b_addr),
-        .b_wdata(b_wdata),
+        .b_wr_addr(b_wr_addr),
+        .b_wr_data(b_wdata),
+        .b_rd_addr(b_rd_addr),
+        .b_rd_data(mac_b),
+
+        .c_we(c_compute_we),
+        .c_wr_addr(c_wr_addr),
+        .c_wr_data(mac_acc),
         .c_rd_addr(c_rd_addr),
-        .c_rd_data(c_rd_data),
-        .compute_re(compute_re),
-        .a_compute_addr(a_compute_addr),
-        .b_compute_addr(b_compute_addr),
-        .c_compute_we(c_compute_we),
-        .c_compute_addr(c_compute_addr),
-        .a_compute_data(mac_a),
-        .b_compute_data(mac_b),
-        .c_compute_wdata(mac_acc)
+        .c_rd_data(c_rd_data)
     );
 
     gemm_controller controller_instance (
@@ -86,9 +89,9 @@ module gemm (
         .c_compute_we(c_compute_we),
         .mac_clear(mac_clear),
         .mac_enable(mac_enable),
-        .a_compute_addr(a_compute_addr),
-        .b_compute_addr(b_compute_addr),
-        .c_compute_addr(c_compute_addr)
+        .a_rd_addr(a_rd_addr),
+        .b_rd_addr(b_rd_addr),
+        .c_wr_addr(c_wr_addr)
     );
 
 endmodule

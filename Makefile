@@ -96,26 +96,26 @@ test-gemv-full-vcs: vectors
 
 gemm-compile:
 	@mkdir -p build/gemm
-	$(IVERILOG) -g2012 -Wall -s tb_gemm -o build/gemm/gemm.vvp rtl/mac.sv rtl/sram.sv rtl/gemm_memory.sv rtl/gemm_controller.sv rtl/gemm.sv tb/tb_gemm.sv > build/gemm/compile.log 2>&1 || { cat build/gemm/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_gemm -o build/gemm/gemm.vvp rtl/mac.sv rtl/sram.sv rtl/memory_wrapper.sv rtl/top_level_controller.sv rtl/gemm.sv tb/tb_gemm.sv > build/gemm/compile.log 2>&1 || { cat build/gemm/compile.log; exit 1; }
 
 test-gemm: gemm-compile
 	cd build/gemm && $(VVP) -l run.log gemm.vvp
 
 test-gemm-vcs:
 	@mkdir -p build/gemm/vcs
-	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm ../../../rtl/mac.sv ../../../rtl/sram.sv ../../../rtl/gemm_memory.sv ../../../rtl/gemm_controller.sv ../../../rtl/gemm.sv ../../../tb/tb_gemm.sv -o simv -l compile.log
+	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm ../../../rtl/mac.sv ../../../rtl/sram.sv ../../../rtl/memory_wrapper.sv ../../../rtl/top_level_controller.sv ../../../rtl/gemm.sv ../../../tb/tb_gemm.sv -o simv -l compile.log
 	cd build/gemm/vcs && ./simv -l run.log
 
 gemm-controller-compile:
 	@mkdir -p build/gemm-controller
-	$(IVERILOG) -g2012 -Wall -s tb_gemm_controller -o build/gemm-controller/controller.vvp rtl/gemm_controller.sv tb/tb_gemm_controller.sv > build/gemm-controller/compile.log 2>&1 || { cat build/gemm-controller/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_gemm_controller -o build/gemm-controller/controller.vvp rtl/top_level_controller.sv tb/tb_gemm_controller.sv > build/gemm-controller/compile.log 2>&1 || { cat build/gemm-controller/compile.log; exit 1; }
 
 test-gemm-controller: gemm-controller-compile
 	cd build/gemm-controller && $(VVP) -l run.log controller.vvp
 
 test-gemm-controller-vcs:
 	@mkdir -p build/gemm-controller/vcs
-	cd build/gemm-controller/vcs && $(VCS) -full64 -sverilog -top tb_gemm_controller ../../../rtl/gemm_controller.sv ../../../tb/tb_gemm_controller.sv -o simv -l compile.log
+	cd build/gemm-controller/vcs && $(VCS) -full64 -sverilog -top tb_gemm_controller ../../../rtl/top_level_controller.sv ../../../tb/tb_gemm_controller.sv -o simv -l compile.log
 	cd build/gemm-controller/vcs && ./simv -l run.log
 
 sram-compile:
