@@ -9,6 +9,7 @@ RANDOM_COUNT ?= 100
 .PHONY: help env smoke smoke-vcs test-python vectors mac-compile test-mac test-mac-vcs gemv-compile test-gemv test-gemv-vcs test-gemv-full test-gemv-full-vcs gemm-compile test-gemm test-gemm-vcs sram-compile test-sram check
 .PHONY: gemm-controller-compile test-gemm-controller test-gemm-controller-vcs
 .PHONY: fifo-compile test-fifo test-fifo-vcs test-fifo-configs
+.PHONY: pe-compile test-pe
 
 help:
 	@printf '%s\n' \
@@ -21,6 +22,7 @@ help:
 	  '  make mac-compile Compile the MAC and its testbench without simulating' \
 	  '  make test-mac    Run your MAC testbench locally with Icarus' \
 	  '  make test-mac-vcs Run MAC checks inside the configured CAE container' \
+	  '  make test-pe     Run PE accumulation, validity, forwarding, and reset/clear checks' \
 	  '  make gemv-compile Compile the GEMV core and testbench without simulating' \
 	  '  make test-gemv    Run the five basic GEMV tests locally' \
 	  '  make test-gemv-vcs Run the basic GEMV tests on CAE' \
@@ -71,6 +73,13 @@ test-mac-vcs:
 	@mkdir -p build/mac/vcs
 	cd build/mac/vcs && $(VCS) -full64 -sverilog -top tb_mac ../../../rtl/mac.sv ../../../tb/tb_mac.sv -o simv -l compile.log
 	cd build/mac/vcs && ./simv -l run.log
+
+pe-compile:
+	@mkdir -p build/pe
+	$(IVERILOG) -g2012 -Wall -s tb_pe -o build/pe/pe.vvp rtl/mac.sv rtl/pe.sv tb/tb_pe.sv > build/pe/compile.log 2>&1 || { cat build/pe/compile.log; exit 1; }
+
+test-pe: pe-compile
+	cd build/pe && $(VVP) -l run.log pe.vvp
 
 gemv-compile:
 	@mkdir -p build/gemv
