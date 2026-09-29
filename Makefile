@@ -10,6 +10,7 @@ RANDOM_COUNT ?= 100
 .PHONY: gemm-controller-compile test-gemm-controller test-gemm-controller-vcs
 .PHONY: fifo-compile test-fifo test-fifo-vcs test-fifo-configs
 .PHONY: pe-compile test-pe
+.PHONY: systolic-array-compile test-systolic-array
 
 help:
 	@printf '%s\n' \
@@ -22,7 +23,8 @@ help:
 	  '  make mac-compile Compile the MAC and its testbench without simulating' \
 	  '  make test-mac    Run your MAC testbench locally with Icarus' \
 	  '  make test-mac-vcs Run MAC checks inside the configured CAE container' \
-	  '  make test-pe     Run PE accumulation, validity, forwarding, and reset/clear checks' \
+	  '  make test-pe     Run PE accumulation, enable, forwarding, and reset checks' \
+	  '  make test-systolic-array Run 2x2 array arithmetic, zero padding, pause, and reset checks' \
 	  '  make gemv-compile Compile the GEMV core and testbench without simulating' \
 	  '  make test-gemv    Run the five basic GEMV tests locally' \
 	  '  make test-gemv-vcs Run the basic GEMV tests on CAE' \
@@ -80,6 +82,13 @@ pe-compile:
 
 test-pe: pe-compile
 	cd build/pe && $(VVP) -l run.log pe.vvp
+
+systolic-array-compile:
+	@mkdir -p build/systolic-array
+	$(IVERILOG) -g2012 -Wall -s tb_systolic_array -o build/systolic-array/systolic-array.vvp rtl/mac.sv rtl/pe.sv rtl/systolic_array.sv tb/tb_systolic_array.sv > build/systolic-array/compile.log 2>&1 || { cat build/systolic-array/compile.log; exit 1; }
+
+test-systolic-array: systolic-array-compile
+	cd build/systolic-array && $(VVP) -l run.log systolic-array.vvp +SEED=$(SEED)
 
 gemv-compile:
 	@mkdir -p build/gemv

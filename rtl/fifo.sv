@@ -6,18 +6,20 @@ module fifo #(
     parameter int DEPTH = 8
 )
 (
-    input logic clk, reset, 
-    input logic push,            // request to add data_in
-    input logic pop,             // request to remove oldest entry
-    input logic [DATA_WIDTH-1:0] data_in,   // DATA_WIDTH-bit data to enqueue
+    input  logic clk, reset, 
+    input  logic push,            // request to add data_in
+    input  logic pop,             // request to remove oldest entry
+    input  logic [DATA_WIDTH-1:0] data_in,   // DATA_WIDTH-bit data to enqueue
     output logic [DATA_WIDTH-1:0] data_out, // updates with removed entry after pop, otherwise holds
     output logic full,           // high when all entries are occupied
     output logic empty           // high when 0 entries are occupied
 );
 
-    logic [DATA_WIDTH-1:0] storage [0:DEPTH-1]; // DEPTH DATA_WIDTH-bit entries
+
     localparam int PTR_WIDTH = $clog2(DEPTH);
     localparam int COUNT_WIDTH = $clog2(DEPTH + 1);
+
+    logic [DATA_WIDTH-1:0] storage [0:DEPTH-1]; // DEPTH DATA_WIDTH-bit entries
     logic [PTR_WIDTH-1:0] wr_ptr;               // selects where next accepted push writes
     logic [PTR_WIDTH-1:0] re_ptr;               // selects where next accepted pop reads
     logic [COUNT_WIDTH-1:0] occupancy_count;    // must represent COUNT_WIDTH-bits

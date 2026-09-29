@@ -4,7 +4,6 @@
 module mac (
     input  logic clk,
     input  logic reset,
-    input  logic clear,
     input  logic enable,
     input  logic signed [7:0] a,
     input  logic signed [7:0] b,
@@ -18,7 +17,7 @@ module mac (
     assign product_extended = { {16{product[15]}}, product }; // 16 sign-extended bits, 16 original product bits
 
     always_ff @(posedge clk) begin
-        if (reset || clear) begin
+        if (reset) begin
             acc <= 32'sd0;
         end else if (enable) begin
             acc <= acc + product_extended;
