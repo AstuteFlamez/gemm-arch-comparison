@@ -19,7 +19,7 @@ Planned architecture; the current GEMM still uses one MAC.
 | DONE | [pe.sv](rtl/pe.sv) | One MAC; registered A/B forwarding and validity; standalone PE verified |
 | DONE | [systolic_array.sv](rtl/systolic_array.sv) | Connect four PEs; verify one output tile |
 | IN-PROGRESS | [memory_controller.sv](rtl/memory_controller.sv) | Load four FIFOs; stagger pops and validity; write four results |
-| NEXT | [top_level_controller.sv](rtl/top_level_controller.sv) | Replace scalar sequencing with tile phases |
+| IN-PROGRESS | [top_level_controller.sv](rtl/top_level_controller.sv) | Replace scalar sequencing with tile phases |
 | NEXT | [gemm.sv](rtl/gemm.sv) | Connect four FIFOs directly to the array; verify full 8×8 GEMM |
 | LATER | [gemv.sv](rtl/gemv.sv) | Existing GEMV works; SRAM conversion |
 
