@@ -16,6 +16,13 @@ stays high after completion until the next accepted start or reset. Read C while
 idle; its synchronous read data updates after the rising edge. Run `make test-gemm`
 to check full 8×8 arithmetic and host control behavior.
 
+## FPGA demo
+
+The [DE2-115 Quartus project](fpga/de2_115/README.md) adds a button-operated
+hardware test with PASS/FAIL LEDs. Run `make test-de2-115` to simulate the wrapper,
+then follow the linked guide to compile and program it from Quartus on the CAE
+lab PC. FPGA timing and board operation still require verification there.
+
 ## Implementation order
 
 | Status | File | Done / remaining work |

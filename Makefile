@@ -5,7 +5,9 @@ VVP ?= vvp
 VCS ?= vcs
 SEED ?= 20260917
 RANDOM_COUNT ?= 100
-GEMM_SOURCES = rtl/mac.sv rtl/pe.sv rtl/systolic_array.sv rtl/fifo.sv rtl/sram.sv rtl/memory_wrapper.sv rtl/memory_controller.sv rtl/top_level_controller.sv rtl/gemm.sv tb/tb_gemm.sv
+GEMM_RTL = rtl/mac.sv rtl/pe.sv rtl/systolic_array.sv rtl/fifo.sv rtl/sram.sv rtl/memory_wrapper.sv rtl/memory_controller.sv rtl/top_level_controller.sv rtl/gemm.sv
+GEMM_SOURCES = $(GEMM_RTL) tb/tb_gemm.sv
+QUARTUS_SH ?= quartus_sh
 
 .PHONY: help env smoke smoke-vcs test-python vectors mac-compile test-mac test-mac-vcs gemv-compile test-gemv test-gemv-vcs test-gemv-full test-gemv-full-vcs gemm-compile test-gemm test-gemm-vcs sram-compile test-sram check
 .PHONY: gemm-controller-compile test-gemm-controller test-gemm-controller-vcs
@@ -13,6 +15,7 @@ GEMM_SOURCES = rtl/mac.sv rtl/pe.sv rtl/systolic_array.sv rtl/fifo.sv rtl/sram.s
 .PHONY: pe-compile test-pe
 .PHONY: systolic-array-compile test-systolic-array
 .PHONY: memory-controller-compile test-memory-controller
+.PHONY: test-de2-115 quartus-de2-115
 
 help:
 	@printf '%s\n' \
@@ -36,6 +39,8 @@ help:
 	  '  make gemm-compile Compile the GEMM core and its testbench' \
 	  '  make test-gemm    Run GEMM arithmetic and control checks locally' \
 	  '  make test-gemm-vcs Run GEMM checks on a configured VCS machine' \
+	  '  make test-de2-115 Simulate the board buttons, GEMM self-test, and LEDs' \
+	  '  make quartus-de2-115 Compile the FPGA project where Quartus is installed' \
 	  '  make gemm-controller-compile Compile standalone GEMM controller checks' \
 	  '  make test-gemm-controller Run top-level tile sequencing and completion checks' \
 	  '  make test-gemm-controller-vcs Run standalone controller checks with VCS' \
@@ -126,6 +131,15 @@ test-gemm-vcs:
 	@mkdir -p build/gemm/vcs
 	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm $(addprefix ../../../,$(GEMM_SOURCES)) -o simv -l compile.log
 	cd build/gemm/vcs && ./simv -l run.log
+
+test-de2-115:
+	@mkdir -p build/de2-115
+	cp fpga/de2_115/expected.hex build/de2-115/expected.hex
+	$(IVERILOG) -g2012 -Wall -s tb_de2_115_gemm -o build/de2-115/board.vvp $(GEMM_RTL) fpga/de2_115/de2_115_gemm_top.sv tb/tb_de2_115_gemm.sv > build/de2-115/compile.log 2>&1 || { cat build/de2-115/compile.log; exit 1; }
+	cd build/de2-115 && $(VVP) -l run.log board.vvp
+
+quartus-de2-115:
+	cd fpga/de2_115 && $(QUARTUS_SH) --flow compile gemm_de2_115
 
 gemm-controller-compile:
 	@mkdir -p build/gemm-controller

@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--output", type=Path, default=Path("build/environment.json"))
     args = parser.parse_args()
     names = (
-        "python3", "make", "git", "ssh", "vcs", "dc_shell", "vivado",
+        "python3", "make", "git", "ssh", "vcs", "dc_shell", "vivado", "quartus_sh",
         "iverilog", "vvp", "verilator", "yosys", "gtkwave", "aws",
     )
     setup_names = (
