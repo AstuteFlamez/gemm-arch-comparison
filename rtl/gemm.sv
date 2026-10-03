@@ -1,6 +1,3 @@
-/*
-TODO: instantiate four FIFOs and connect memory controller, FIFOs, and systolic array
-*/
 `timescale 1ns/1ps
 `default_nettype none
 
@@ -13,86 +10,154 @@ module gemm (
     - A and B have 8-bit signed values
     - C holds 32-bit signed results
     */
-    input  logic a_we,                 // A matrix write enable
-    input  logic [5:0] a_wr_addr,      // 6-bit write address for A matrix (64 elements)
-    input  logic signed [7:0] a_wdata, // 8-bit signed A matrix write data
+    input  logic a_we,
+    input  logic [5:0] a_wr_addr,
+    input  logic signed [7:0] a_wdata,
     
-    input  logic b_we,                 // B matrix write enable
-    input  logic [5:0] b_wr_addr,      // 6-bit write address for B matrix (64 elements)
-    input  logic signed [7:0] b_wdata, // 8-bit signed B matrix write data
+    input  logic b_we,
+    input  logic [5:0] b_wr_addr,
+    input  logic signed [7:0] b_wdata,
 
     // control signals
     input  logic start,
     output logic busy,
     output logic done,
 
-    input  logic [5:0] c_rd_addr,        // 6-bit address for output C matrix (64 elements)
-    output logic signed [31:0] c_rd_data // 32-bit signed output C matrix read data
+    input  logic [5:0] c_rd_addr,
+    output logic signed [31:0] c_rd_data
 );
 
-    logic mac_clear;             // clear MAC
-    logic mac_enable;            // enable MAC
-    logic signed [7:0] mac_a;    // MAC a value
-    logic signed [7:0] mac_b;    // MAC b value
-    logic signed [31:0] mac_acc; // MAC accumualator
+    logic tile_start, tile_done;
+    logic [2:0] tile_row, tile_col;
+    logic ab_re, c_we;
+    logic [5:0] a_rd_addr, b_rd_addr, c_wr_addr;
+    logic signed [7:0] a_rd_data, b_rd_data;
+    logic signed [31:0] c_wr_data;
 
-    logic [5:0] a_rd_addr;       // A element to read
-    logic [5:0] b_rd_addr;       // B element to read
-    logic [5:0] c_wr_addr;       // C element to write
-    logic compute_re;            // A/B read enable
-    logic c_compute_we;          // C write enable
+    logic [1:0] fifo_push, fifo_pop, fifo_valid, c_sel;
+    logic signed [7:0] a0_fifo_data, a1_fifo_data;
+    logic signed [7:0] b0_fifo_data, b1_fifo_data;
+    logic array_clear, array_enable;
+    logic signed [31:0] C00, C01, C10, C11;
 
-    mac mac_instance (
+    // Choose each of the 16 output tiles and announce when the full job is done.
+    top_level_controller controller_instance (
         .clk(clk),
         .reset(reset),
-        .clear(mac_clear),
-        .enable(mac_enable),
-        .a(mac_a),
-        .b(mac_b),
-        .acc(mac_acc)
+        .start(start),
+        .busy(busy),
+        .done(done),
+        .tile_start(tile_start),
+        .tile_done(tile_done),
+        .tile_row(tile_row),
+        .tile_col(tile_col)
     );
 
+    // For one tile: load the FIFOs, run the array, then store its four results.
+    memory_controller tile_controller_instance (
+        .clk(clk),
+        .reset(reset),
+        .start(tile_start),
+        .done(tile_done),
+        .tile_row(tile_row),
+        .tile_col(tile_col),
+        .ab_re(ab_re),
+        .a_rd_addr(a_rd_addr),
+        .b_rd_addr(b_rd_addr),
+        .fifo_push(fifo_push),
+        .fifo_pop(fifo_pop),
+        .fifo_valid(fifo_valid),
+        .array_clear(array_clear),
+        .array_enable(array_enable),
+        .c_we(c_we),
+        .c_wr_addr(c_wr_addr),
+        .c_sel(c_sel)
+    );
+
+    // The host accesses SRAM while idle; the tile controller accesses it while busy.
     memory_wrapper memory_instance (
         .clk(clk),
         .reset(reset),
         .busy(busy),
-        .ab_re(compute_re),
+        .ab_re(ab_re),
 
         .a_we(a_we),
         .a_wr_addr(a_wr_addr),
         .a_wr_data(a_wdata),
         .a_rd_addr(a_rd_addr),
-        .a_rd_data(mac_a),
+        .a_rd_data(a_rd_data),
 
         .b_we(b_we),
         .b_wr_addr(b_wr_addr),
         .b_wr_data(b_wdata),
         .b_rd_addr(b_rd_addr),
-        .b_rd_data(mac_b),
+        .b_rd_data(b_rd_data),
 
-        .c_we(c_compute_we),
+        .c_we(c_we),
         .c_wr_addr(c_wr_addr),
-        .c_wr_data(mac_acc),
+        .c_wr_data(c_wr_data),
         .c_rd_addr(c_rd_addr),
         .c_rd_data(c_rd_data)
     );
 
-    gemm_controller controller_instance (
+    // Each FIFO holds eight values. Bit 0 controls A0/B0; bit 1 controls A1/B1.
+    // The fixed schedule fills and drains them completely for every tile.
+    fifo #(.DATA_WIDTH(8), .DEPTH(8)) a0_fifo (
         .clk(clk),
         .reset(reset),
-        .start(start),
-        .a_we(a_we),
-        .b_we(b_we),
-        .busy(busy),
-        .done(done),
-        .compute_re(compute_re),
-        .c_compute_we(c_compute_we),
-        .mac_clear(mac_clear),
-        .mac_enable(mac_enable),
-        .a_rd_addr(a_rd_addr),
-        .b_rd_addr(b_rd_addr),
-        .c_wr_addr(c_wr_addr)
+        .push(fifo_push[0]), .pop(fifo_pop[0]),
+        .data_in(a_rd_data), .data_out(a0_fifo_data),
+        .full(), .empty()
     );
+
+    fifo #(.DATA_WIDTH(8), .DEPTH(8)) a1_fifo (
+        .clk(clk),
+        .reset(reset),
+        .push(fifo_push[1]), .pop(fifo_pop[1]),
+        .data_in(a_rd_data), .data_out(a1_fifo_data),
+        .full(), .empty()
+    );
+
+    fifo #(.DATA_WIDTH(8), .DEPTH(8)) b0_fifo (
+        .clk(clk),
+        .reset(reset),
+        .push(fifo_push[0]), .pop(fifo_pop[0]),
+        .data_in(b_rd_data), .data_out(b0_fifo_data),
+        .full(), .empty()
+    );
+
+    fifo #(.DATA_WIDTH(8), .DEPTH(8)) b1_fifo (
+        .clk(clk),
+        .reset(reset),
+        .push(fifo_push[1]), .pop(fifo_pop[1]),
+        .data_in(b_rd_data), .data_out(b1_fifo_data),
+        .full(), .empty()
+    );
+
+    // FIFO outputs hold their last popped value. Feed zero outside each pair's
+    // valid window so old values are not multiplied again as the array drains.
+    // Clear the array at the beginning of each tile to start fresh accumulators.
+    systolic_array array_instance (
+        .clk(clk),
+        .reset(reset | array_clear),
+        .enable(array_enable),
+        .A0(fifo_valid[0] ? a0_fifo_data : 8'sd0),
+        .A1(fifo_valid[1] ? a1_fifo_data : 8'sd0),
+        .B0(fifo_valid[0] ? b0_fifo_data : 8'sd0),
+        .B1(fifo_valid[1] ? b1_fifo_data : 8'sd0),
+        .C00(C00), .C01(C01), .C10(C10), .C11(C11)
+    );
+
+    // C SRAM has one write port, so store one array result per STORE cycle.
+    always_comb begin
+        case (c_sel)
+            0: c_wr_data = C00;
+            1: c_wr_data = C01;
+            2: c_wr_data = C10;
+            3: c_wr_data = C11;
+            default: c_wr_data = 0;
+        endcase
+    end
 
 endmodule
 

@@ -4,9 +4,17 @@ Small SystemVerilog projects building toward an 8×8 GEMM using a 2×2 systolic 
 
 ## GEMM architecture
 
-Planned architecture; the current GEMM still uses one MAC.
+The GEMM core reuses one 2×2 systolic array across 16 output tiles. The top-level
+controller selects each tile; the memory controller loads four FIFOs, runs the
+array, and writes its four results to C SRAM.
 
-![Planned 2×2 systolic GEMM with A FIFOs on the left and B FIFOs above](docs/systolic-array.svg)
+![2×2 systolic GEMM with A FIFOs on the left and B FIFOs above](docs/systolic-array.svg)
+
+Load A and B while idle, then assert `start` for a clock edge. The calculation
+takes 544 clocks after accepting `start`. `busy` stays high throughout; `done`
+stays high after completion until the next accepted start or reset. Read C while
+idle; its synchronous read data updates after the rising edge. Run `make test-gemm`
+to check full 8×8 arithmetic and host control behavior.
 
 ## Implementation order
 
@@ -20,7 +28,7 @@ Planned architecture; the current GEMM still uses one MAC.
 | DONE | [systolic_array.sv](rtl/systolic_array.sv) | Connect four PEs; verify one output tile |
 | DONE | [memory_controller.sv](rtl/memory_controller.sv) | Load four FIFOs; stagger pops and validity; write four results |
 | DONE | [top_level_controller.sv](rtl/top_level_controller.sv) | Sequence 16 tiles; wait for tile completion; maintain busy and sticky done |
-| IN-PROGRESS | [gemm.sv](rtl/gemm.sv) | Connect four FIFOs directly to the array; verify full 8×8 GEMM |
+| DONE | [gemm.sv](rtl/gemm.sv) | Connect both controllers, four FIFOs, SRAMs, and the array; full 8×8 GEMM verified |
 | LATER | [gemv.sv](rtl/gemv.sv) | Existing GEMV works; SRAM conversion |
 
 ## Repository layout

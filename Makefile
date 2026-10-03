@@ -5,6 +5,7 @@ VVP ?= vvp
 VCS ?= vcs
 SEED ?= 20260917
 RANDOM_COUNT ?= 100
+GEMM_SOURCES = rtl/mac.sv rtl/pe.sv rtl/systolic_array.sv rtl/fifo.sv rtl/sram.sv rtl/memory_wrapper.sv rtl/memory_controller.sv rtl/top_level_controller.sv rtl/gemm.sv tb/tb_gemm.sv
 
 .PHONY: help env smoke smoke-vcs test-python vectors mac-compile test-mac test-mac-vcs gemv-compile test-gemv test-gemv-vcs test-gemv-full test-gemv-full-vcs gemm-compile test-gemm test-gemm-vcs sram-compile test-sram check
 .PHONY: gemm-controller-compile test-gemm-controller test-gemm-controller-vcs
@@ -116,14 +117,14 @@ test-gemv-full-vcs: vectors
 
 gemm-compile:
 	@mkdir -p build/gemm
-	$(IVERILOG) -g2012 -Wall -s tb_gemm -o build/gemm/gemm.vvp rtl/mac.sv rtl/sram.sv rtl/memory_wrapper.sv rtl/top_level_controller.sv rtl/gemm.sv tb/tb_gemm.sv > build/gemm/compile.log 2>&1 || { cat build/gemm/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_gemm -o build/gemm/gemm.vvp $(GEMM_SOURCES) > build/gemm/compile.log 2>&1 || { cat build/gemm/compile.log; exit 1; }
 
 test-gemm: gemm-compile
 	cd build/gemm && $(VVP) -l run.log gemm.vvp
 
 test-gemm-vcs:
 	@mkdir -p build/gemm/vcs
-	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm ../../../rtl/mac.sv ../../../rtl/sram.sv ../../../rtl/memory_wrapper.sv ../../../rtl/top_level_controller.sv ../../../rtl/gemm.sv ../../../tb/tb_gemm.sv -o simv -l compile.log
+	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm $(addprefix ../../../,$(GEMM_SOURCES)) -o simv -l compile.log
 	cd build/gemm/vcs && ./simv -l run.log
 
 gemm-controller-compile:

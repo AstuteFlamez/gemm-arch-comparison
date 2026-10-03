@@ -2,8 +2,9 @@
 `default_nettype none
 
 module tb_gemm;
-    // 64 outputs, each taking CLEAR + 8*(READ + MAC) + STORE.
-    localparam integer WORK_CYCLES = 1152;
+    // 16 tiles, each taking one launch + 32 load/compute/store + one done edge.
+    localparam integer WORK_CYCLES = 544;
+    localparam integer BEFORE_FIRST_STORE = 29;
 
     logic clk = 1'b0;
     logic reset = 1'b1;
@@ -25,7 +26,7 @@ module tb_gemm;
     logic [31:0] random_state = 32'h20260919;
     integer completed_jobs = 0;
     integer checked_outputs = 0;
-    integer reset_offsets [0:4];
+    integer reset_offsets [0:10];
 
     gemm dut (
         .clk(clk), .reset(reset),
@@ -141,7 +142,7 @@ module tb_gemm;
         held_read_data = c_rd_data;
         for (integer cycle = 1; cycle <= WORK_CYCLES; cycle = cycle + 1) begin
             @(negedge clk);
-            // Writes and extra starts must be ignored through the last STORE.
+            // Writes and extra starts must be ignored until full-job completion.
             start = busy_noise || hold_start;
             a_we = busy_noise;
             b_we = busy_noise;
@@ -154,9 +155,9 @@ module tb_gemm;
             #1;
             check_read_data(held_read_data, "busy address change: C output holds");
             tick();
-            // This includes the final STORE edge: done means the results are
+            // This includes the completion edge: done means all results are
             // stored, but the first result read needs a subsequent idle edge.
-            check_read_data(held_read_data, "busy/STORE edge: C output holds");
+            check_read_data(held_read_data, "busy/completion edge: C output holds");
             check_status(cycle < WORK_CYCLES, cycle == WORK_CYCLES,
                          $sformatf("%s: cycle %0d", label_text, cycle));
         end
@@ -307,7 +308,7 @@ module tb_gemm;
         end
         load_operands();
         begin_job("reset before first C write");
-        repeat (17) begin // CLEAR + eight READ/MAC pairs, now in STORE.
+        repeat (BEFORE_FIRST_STORE) begin // Launch + 17 load + 11 compute edges.
             @(negedge clk);
             idle_requests();
             tick();
@@ -318,15 +319,22 @@ module tb_gemm;
             read_result(i, "C contents survive reset", 1'b0);
         $display("PASS: reset suppresses STORE and preserves C contents/output");
 
-        // Abort in CLEAR, READ, MAC, the first STORE, and the final STORE.
+        // Abort before launch, during FIFO loading and array computation,
+        // before/partway through STORE, at tile handoff, and near job completion.
         reset_offsets[0] = 0;
         reset_offsets[1] = 1;
-        reset_offsets[2] = 2;
-        reset_offsets[3] = 17;
-        reset_offsets[4] = WORK_CYCLES - 1;
+        reset_offsets[2] = 9;
+        reset_offsets[3] = 18;
+        reset_offsets[4] = 27;
+        reset_offsets[5] = BEFORE_FIRST_STORE;
+        reset_offsets[6] = BEFORE_FIRST_STORE + 1;
+        reset_offsets[7] = 33;
+        reset_offsets[8] = 34;
+        reset_offsets[9] = WORK_CYCLES - 2;
+        reset_offsets[10] = WORK_CYCLES - 1;
         set_patterned_inputs();
         load_operands();
-        for (integer test_index = 0; test_index < 5; test_index = test_index + 1) begin
+        for (integer test_index = 0; test_index < 11; test_index = test_index + 1) begin
             begin_job("job to abort");
             repeat (reset_offsets[test_index]) begin
                 @(negedge clk);
@@ -344,7 +352,7 @@ module tb_gemm;
         begin_job("held start first job");
         finish_job("held start first job", 1'b0, 1'b1);
         // Only one synchronous read fits on the idle edge that accepts the
-        // held start. Read the final word, just stored at the previous edge.
+        // held start. Read the final word from the completed job.
         // The full matrix is checked after the second job with start low.
         @(negedge clk);
         previous_read = c_rd_data;
@@ -361,6 +369,7 @@ module tb_gemm;
 
         $display("PASS: GEMM completed %0d jobs and checked %0d outputs",
                  completed_jobs, checked_outputs);
+        $display("PASS: %0d clocks per full matrix; 11 reset/restart cases", WORK_CYCLES);
         $finish;
     end
 
