@@ -11,6 +11,7 @@ RANDOM_COUNT ?= 100
 .PHONY: fifo-compile test-fifo test-fifo-vcs test-fifo-configs
 .PHONY: pe-compile test-pe
 .PHONY: systolic-array-compile test-systolic-array
+.PHONY: memory-controller-compile test-memory-controller
 
 help:
 	@printf '%s\n' \
@@ -25,6 +26,7 @@ help:
 	  '  make test-mac-vcs Run MAC checks inside the configured CAE container' \
 	  '  make test-pe     Run PE accumulation, enable, forwarding, and reset checks' \
 	  '  make test-systolic-array Run 2x2 array arithmetic, zero padding, pause, and reset checks' \
+	  '  make test-memory-controller Run tile loading, compute, writeback, reset, and timing checks' \
 	  '  make gemv-compile Compile the GEMV core and testbench without simulating' \
 	  '  make test-gemv    Run the five basic GEMV tests locally' \
 	  '  make test-gemv-vcs Run the basic GEMV tests on CAE' \
@@ -135,6 +137,13 @@ test-gemm-controller-vcs:
 	@mkdir -p build/gemm-controller/vcs
 	cd build/gemm-controller/vcs && $(VCS) -full64 -sverilog -top tb_gemm_controller ../../../rtl/top_level_controller.sv ../../../tb/tb_gemm_controller.sv -o simv -l compile.log
 	cd build/gemm-controller/vcs && ./simv -l run.log
+
+memory-controller-compile:
+	@mkdir -p build/memory-controller
+	$(IVERILOG) -g2012 -Wall -s tb_memory_controller -o build/memory-controller/controller.vvp rtl/memory_controller.sv rtl/sram.sv rtl/fifo.sv rtl/mac.sv rtl/pe.sv rtl/systolic_array.sv tb/tb_memory_controller.sv > build/memory-controller/compile.log 2>&1 || { cat build/memory-controller/compile.log; exit 1; }
+
+test-memory-controller: memory-controller-compile
+	cd build/memory-controller && $(VVP) -l run.log controller.vvp +SEED=$(SEED)
 
 sram-compile:
 	@mkdir -p build/sram
