@@ -1,5 +1,5 @@
 /*
-    TODO: need to interface w/ sram
+    TODO: need to interface w/ sram + lots lot more
 */
 `timescale 1ns/1ps
 `default_nettype none

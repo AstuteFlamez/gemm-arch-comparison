@@ -36,7 +36,7 @@ help:
 	  '  make test-gemm    Run GEMM arithmetic and control checks locally' \
 	  '  make test-gemm-vcs Run GEMM checks on a configured VCS machine' \
 	  '  make gemm-controller-compile Compile standalone GEMM controller checks' \
-	  '  make test-gemm-controller Run controller sequencing and protocol checks' \
+	  '  make test-gemm-controller Run top-level tile sequencing and completion checks' \
 	  '  make test-gemm-controller-vcs Run standalone controller checks with VCS' \
 	  '  make sram-compile Compile standalone SRAM checks in two configurations' \
 	  '  make test-sram    Run standalone SRAM checks (64x8 and 7x16)' \
@@ -128,14 +128,14 @@ test-gemm-vcs:
 
 gemm-controller-compile:
 	@mkdir -p build/gemm-controller
-	$(IVERILOG) -g2012 -Wall -s tb_gemm_controller -o build/gemm-controller/controller.vvp rtl/top_level_controller.sv tb/tb_gemm_controller.sv > build/gemm-controller/compile.log 2>&1 || { cat build/gemm-controller/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_gemm_controller -o build/gemm-controller/controller.vvp rtl/top_level_controller.sv rtl/memory_controller.sv tb/tb_gemm_controller.sv > build/gemm-controller/compile.log 2>&1 || { cat build/gemm-controller/compile.log; exit 1; }
 
 test-gemm-controller: gemm-controller-compile
 	cd build/gemm-controller && $(VVP) -l run.log controller.vvp
 
 test-gemm-controller-vcs:
 	@mkdir -p build/gemm-controller/vcs
-	cd build/gemm-controller/vcs && $(VCS) -full64 -sverilog -top tb_gemm_controller ../../../rtl/top_level_controller.sv ../../../tb/tb_gemm_controller.sv -o simv -l compile.log
+	cd build/gemm-controller/vcs && $(VCS) -full64 -sverilog -top tb_gemm_controller ../../../rtl/top_level_controller.sv ../../../rtl/memory_controller.sv ../../../tb/tb_gemm_controller.sv -o simv -l compile.log
 	cd build/gemm-controller/vcs && ./simv -l run.log
 
 memory-controller-compile:
