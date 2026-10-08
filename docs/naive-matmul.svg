@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="850" viewBox="0 0 1120 850" role="img" aria-labelledby="title desc">
   <title id="title">Finalized four-MAC conventional matrix multiplication architecture</title>
-  <desc id="desc">A conventional baseline with the same four MACs, signed INT8 inputs, INT32 accumulators, and single-port A, B, C SRAM interface as the two by two systolic GEMM. A top-level controller sequences sixteen two by two output tiles. For each tile, a new tile controller loads two A rows and two B columns into four eight-word FIFOs using one A and one B memory read per clock. All FIFOs then pop together, with no skew. Direct operand broadcast sends A0 and B0 to MAC0, A0 and B1 to MAC1, A1 and B0 to MAC2, and A1 and B1 to MAC3. Each MAC accumulates eight products, with no operand forwarding between MACs. A four-to-one result selector writes the four results into C SRAM over four clocks. Arrows between blocks can represent multiple data signals. Dashed arrows represent control. This diagram shows the finalized architecture; the conventional RTL is not yet implemented.</desc>
+  <desc id="desc">A conventional baseline with the same four MACs, signed INT8 inputs, INT32 accumulators, and single-port A, B, C SRAM interface as the two by two systolic GEMM. A top-level controller sequences sixteen two by two output tiles. Inside conventional_gemm.sv, conventional_tile_controller.sv loads two A rows and two B columns into four eight-word FIFOs using one A and one B memory read per clock. All FIFOs then pop together, with no skew. Direct operand broadcast sends A0 and B0 to MAC0, A0 and B1 to MAC1, A1 and B0 to MAC2, and A1 and B1 to MAC3. Each MAC accumulates eight products, with no operand forwarding between MACs. A four-to-one result selector writes the four results into C SRAM over four clocks. Arrows between blocks can represent multiple data signals. Dashed arrows represent control. The finalized architecture is implemented and verified in RTL simulation. Each tile loads for 17 clocks, primes the registered FIFO outputs for one clock, accumulates for eight clocks, and stores for four clocks. The full matrix takes 512 clocks from accepted start to done, including tile handshakes.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#C5050C"/>
@@ -21,15 +21,15 @@
   </style>
   <rect width="1120" height="850" fill="#FFFFFF"/>
   <rect x="20" y="20" width="1080" height="810" rx="14" fill="#FFF5F5" stroke="#C5050C" stroke-width="2"/>
-  <text x="45" y="53" class="heading red">Conventional matmul — 4-MAC baseline</text>
+  <text x="45" y="53" class="heading red">conventional_gemm.sv · 4 MACs</text>
   <text x="1055" y="53" class="label red" text-anchor="end">Finalized architecture</text>
 
   <rect x="50" y="85" width="310" height="76" rx="7" class="box"/>
   <text x="205" y="115" text-anchor="middle" class="file">top_level_controller.sv</text>
   <text x="205" y="141" text-anchor="middle" class="small">Sequence 16 output tiles · busy / done</text>
   <rect x="400" y="85" width="310" height="76" rx="7" class="box"/>
-  <text x="555" y="115" text-anchor="middle" class="heading red">Matmul tile controller</text>
-  <text x="555" y="141" text-anchor="middle" class="small">New RTL: load · clear · compute · store</text>
+  <text x="555" y="115" text-anchor="middle" class="file" style="font-size: 14px">conventional_tile_controller.sv</text>
+  <text x="555" y="141" text-anchor="middle" class="small">Clear / load · prime / compute · store</text>
   <rect x="750" y="70" width="320" height="115" rx="7" class="box"/>
   <text x="910" y="98" text-anchor="middle" class="file">memory_wrapper.sv</text>
   <rect x="770" y="112" width="280" height="52" rx="5" fill="#FFF5F5" stroke="#C5050C"/>
@@ -60,8 +60,8 @@
   <text x="965" y="334" text-anchor="middle" class="small">B1[k] = B[k, c+1]</text>
 
   <text x="55" y="383" class="label red">Each 2×2 tile</text>
-  <text x="55" y="410" class="small">1. Load 32 operands</text>
-  <text x="55" y="434" class="small">2. Clear four sums</text>
+  <text x="55" y="410" class="small">1. Clear + load FIFOs</text>
+  <text x="55" y="434" class="small">2. Prime FIFO outputs</text>
   <text x="55" y="458" class="small">3. 8 parallel MAC steps</text>
   <text x="55" y="482" class="small">4. Store four outputs</text>
 

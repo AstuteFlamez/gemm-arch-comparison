@@ -1,13 +1,16 @@
 `timescale 1ns/1ps
 `default_nettype none
 
-module tb_gemm;
-    // 16 tiles, each taking one launch + 32 load/compute/store + one done edge.
-    localparam integer WORK_CYCLES = 544;
-    localparam integer BEFORE_FIRST_STORE = 29;
+module tb_gemm #(
+    parameter bit USE_CONVENTIONAL = 1'b0
+);
+    // Each tile: launch + 17 load + 9/11 compute + 4 store + done edge.
+    localparam integer TILE_CYCLES = USE_CONVENTIONAL ? 32 : 34;
+    localparam integer WORK_CYCLES = 16 * TILE_CYCLES;
+    localparam integer BEFORE_FIRST_STORE = USE_CONVENTIONAL ? 27 : 29;
 
     logic clk = 1'b0;
-    logic reset = 1'b1;
+    logic rst = 1'b1;
     logic a_we = 1'b0;
     logic b_we = 1'b0;
     logic [5:0] a_wr_addr = 6'd0;
@@ -26,15 +29,27 @@ module tb_gemm;
     logic [31:0] random_state = 32'h20260919;
     integer completed_jobs = 0;
     integer checked_outputs = 0;
-    integer reset_offsets [0:10];
+    integer rst_offsets [0:10];
 
-    systolic_gemm dut (
-        .clk(clk), .reset(reset),
-        .a_we(a_we), .a_wr_addr(a_wr_addr), .a_wdata(a_wdata),
-        .b_we(b_we), .b_wr_addr(b_wr_addr), .b_wdata(b_wdata),
-        .start(start), .busy(busy), .done(done),
-        .c_rd_addr(c_rd_addr), .c_rd_data(c_rd_data)
-    );
+    generate
+        if (USE_CONVENTIONAL) begin : conventional
+            conventional_gemm dut (
+                .clk(clk), .rst(rst),
+                .a_we(a_we), .a_wr_addr(a_wr_addr), .a_wdata(a_wdata),
+                .b_we(b_we), .b_wr_addr(b_wr_addr), .b_wdata(b_wdata),
+                .start(start), .busy(busy), .done(done),
+                .c_rd_addr(c_rd_addr), .c_rd_data(c_rd_data)
+            );
+        end else begin : systolic
+            systolic_gemm dut (
+                .clk(clk), .rst(rst),
+                .a_we(a_we), .a_wr_addr(a_wr_addr), .a_wdata(a_wdata),
+                .b_we(b_we), .b_wr_addr(b_wr_addr), .b_wdata(b_wdata),
+                .start(start), .busy(busy), .done(done),
+                .c_rd_addr(c_rd_addr), .c_rd_data(c_rd_data)
+            );
+        end
+    endgenerate
 
     always #5 clk = ~clk;
 
@@ -68,12 +83,12 @@ module tb_gemm;
                    label_text, wanted_data, c_rd_data);
     endtask
 
-    task automatic reset_core;
+    task automatic rst_core;
         logic signed [31:0] held_read_data;
         @(negedge clk);
         held_read_data = c_rd_data;
         idle_requests();
-        reset = 1'b1;
+        rst = 1'b1;
         // A different address must not trigger a read while reset is high.
         c_rd_addr = c_rd_addr + 6'd1;
         #1;
@@ -84,7 +99,7 @@ module tb_gemm;
             check_read_data(held_read_data, "reset edge: C output holds");
         end
         @(negedge clk);
-        reset = 1'b0;
+        rst = 1'b0;
     endtask
 
     // A mathematical reference using outer products, independent of RTL timing.
@@ -222,7 +237,8 @@ module tb_gemm;
 
     initial begin : tests
         logic signed [31:0] previous_read;
-        reset_core();
+        $display("Testing %s GEMM", USE_CONVENTIONAL ? "conventional" : "systolic");
+        rst_core();
 
         set_patterned_inputs();
         for (integer i = 0; i < 64; i = i + 1)
@@ -308,43 +324,43 @@ module tb_gemm;
         end
         load_operands();
         begin_job("reset before first C write");
-        repeat (BEFORE_FIRST_STORE) begin // Launch + 17 load + 11 compute edges.
+        repeat (BEFORE_FIRST_STORE) begin // Launch + load + compute edges.
             @(negedge clk);
             idle_requests();
             tick();
             check_status(1'b1, 1'b0, "before suppressed C write");
         end
-        reset_core();
+        rst_core();
         for (integer i = 0; i < 64; i = i + 1)
             read_result(i, "C contents survive reset", 1'b0);
         $display("PASS: reset suppresses STORE and preserves C contents/output");
 
-        // Abort before launch, during FIFO loading and array computation,
+        // Abort before launch, during FIFO loading and computation,
         // before/partway through STORE, at tile handoff, and near job completion.
-        reset_offsets[0] = 0;
-        reset_offsets[1] = 1;
-        reset_offsets[2] = 9;
-        reset_offsets[3] = 18;
-        reset_offsets[4] = 27;
-        reset_offsets[5] = BEFORE_FIRST_STORE;
-        reset_offsets[6] = BEFORE_FIRST_STORE + 1;
-        reset_offsets[7] = 33;
-        reset_offsets[8] = 34;
-        reset_offsets[9] = WORK_CYCLES - 2;
-        reset_offsets[10] = WORK_CYCLES - 1;
+        rst_offsets[0] = 0;
+        rst_offsets[1] = 1;
+        rst_offsets[2] = 9;
+        rst_offsets[3] = 18;
+        rst_offsets[4] = BEFORE_FIRST_STORE - 2;
+        rst_offsets[5] = BEFORE_FIRST_STORE;
+        rst_offsets[6] = BEFORE_FIRST_STORE + 1;
+        rst_offsets[7] = TILE_CYCLES - 1;
+        rst_offsets[8] = TILE_CYCLES;
+        rst_offsets[9] = WORK_CYCLES - 2;
+        rst_offsets[10] = WORK_CYCLES - 1;
         set_patterned_inputs();
         load_operands();
         for (integer test_index = 0; test_index < 11; test_index = test_index + 1) begin
             begin_job("job to abort");
-            repeat (reset_offsets[test_index]) begin
+            repeat (rst_offsets[test_index]) begin
                 @(negedge clk);
                 idle_requests();
                 tick();
                 check_status(1'b1, 1'b0, "before reset during work");
             end
-            reset_core();
+            rst_core();
             run_job($sformatf("restart after reset at offset %0d",
-                             reset_offsets[test_index]), 1'b0);
+                             rst_offsets[test_index]), 1'b0);
         end
 
         // Holding start requests another job on the first idle edge after done.

@@ -4,7 +4,7 @@
 module tb_gemv;
 
     logic clk;
-    logic reset;
+    logic rst;
     logic a_we;
     logic [5:0] a_addr;
     logic signed [7:0] a_wdata;
@@ -24,7 +24,7 @@ module tb_gemv;
 
     gemv dut (
         .clk(clk),
-        .reset(reset),
+        .rst(rst),
         .a_we(a_we),
         .a_addr(a_addr),
         .a_wdata(a_wdata),
@@ -108,7 +108,7 @@ module tb_gemv;
     endtask
 
     initial begin
-        reset = 1'b1;
+        rst = 1'b1;
         a_we = 1'b0;
         x_we = 1'b0;
         start = 1'b0;
@@ -124,7 +124,7 @@ module tb_gemv;
             $fatal(1, "reset failed");
         end
         @(negedge clk);
-        reset = 1'b0;
+        rst = 1'b0;
 
         // row 0 is [1,2,3,4,5,6,7,8], row 1 is twice that, etc.
         for (integer row = 0; row < 8; row = row + 1) begin

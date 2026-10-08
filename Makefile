@@ -8,7 +8,10 @@ RANDOM_COUNT ?= 100
 BOARD_SEED ?= 20261008
 BOARD_RANDOM_COUNT ?= 100
 BOARD_VECTOR_ARGS = --seed $(BOARD_SEED) --random-count $(BOARD_RANDOM_COUNT) --out-dir fpga/de2_115
-GEMM_RTL = rtl/gemm/mac.sv rtl/gemm/systolic_array/pe.sv rtl/gemm/systolic_array/systolic_array.sv rtl/gemm/fifo.sv rtl/gemm/memory/sram.sv rtl/gemm/memory/memory_wrapper.sv rtl/gemm/systolic_array/systolic_tile_controller.sv rtl/gemm/top_level_controller.sv rtl/gemm/systolic_array/systolic_gemm.sv
+GEMM_COMMON_RTL = rtl/gemm/mac.sv rtl/gemm/fifo.sv rtl/gemm/memory/sram.sv rtl/gemm/memory/memory_wrapper.sv rtl/gemm/top_level_controller.sv
+SYSTOLIC_RTL = rtl/gemm/systolic_array/pe.sv rtl/gemm/systolic_array/systolic_array.sv rtl/gemm/systolic_array/systolic_tile_controller.sv rtl/gemm/systolic_array/systolic_gemm.sv
+CONVENTIONAL_RTL = rtl/gemm/conventional_matmul/conventional_tile_controller.sv rtl/gemm/conventional_matmul/conventional_gemm.sv
+GEMM_RTL = $(GEMM_COMMON_RTL) $(SYSTOLIC_RTL)
 GEMM_SOURCES = $(GEMM_RTL) tb/tb_gemm.sv
 QUARTUS_SH ?= quartus_sh
 
@@ -19,10 +22,11 @@ QUARTUS_SH ?= quartus_sh
 .PHONY: systolic-array-compile test-systolic-array
 .PHONY: systolic-tile-controller-compile test-systolic-tile-controller
 .PHONY: de2-115-vectors check-de2-115-vectors test-de2-115 quartus-de2-115
+.PHONY: test-conventional-tile-controller test-conventional-gemm test-gemm-comparison
 
 help:
 	@printf '%s\n' \
-	  'Current milestone: test the GEMM core in rtl/gemm/systolic_array/systolic_gemm.sv' \
+	  'Current milestone: compare the four-MAC conventional and systolic GEMM cores' \
 	  '  make env        Find tools in this shell; write build/environment.json' \
 	  '  make smoke      Compile/run the local Icarus environment test' \
 	  '  make smoke-vcs  Compile/run the same test on a configured VCS machine' \
@@ -42,6 +46,9 @@ help:
 	  '  make gemm-compile Compile the GEMM core and its testbench' \
 	  '  make test-gemm    Run GEMM arithmetic and control checks locally' \
 	  '  make test-gemm-vcs Run GEMM checks on a configured VCS machine' \
+	  '  make test-conventional-tile-controller Check conventional tile arithmetic and timing' \
+	  '  make test-conventional-gemm Run the same arithmetic/protocol tests on conventional GEMM' \
+	  '  make test-gemm-comparison Run both cores on the same 110 FPGA fixture pairs' \
 	  '  make test-de2-115 Simulate the board buttons, GEMM self-test, and LEDs' \
 	  '  make de2-115-vectors Regenerate board ROMs (10 directed + BOARD_RANDOM_COUNT pairs)' \
 	  '  make check-de2-115-vectors Verify checked-in ROMs match BOARD_SEED and BOARD_RANDOM_COUNT' \
@@ -136,6 +143,22 @@ test-gemm-vcs:
 	@mkdir -p build/gemm/vcs
 	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm $(addprefix ../../../,$(GEMM_SOURCES)) -o simv -l compile.log
 	cd build/gemm/vcs && ./simv -l run.log
+
+test-conventional-tile-controller:
+	@mkdir -p build/conventional-tile-controller
+	$(IVERILOG) -g2012 -Wall -s tb_conventional_tile_controller -o build/conventional-tile-controller/controller.vvp $(GEMM_COMMON_RTL) $(CONVENTIONAL_RTL) tb/tb_conventional_tile_controller.sv > build/conventional-tile-controller/compile.log 2>&1 || { cat build/conventional-tile-controller/compile.log; exit 1; }
+	cd build/conventional-tile-controller && $(VVP) -l run.log controller.vvp +SEED=$(SEED)
+
+test-conventional-gemm:
+	@mkdir -p build/conventional-gemm
+	$(IVERILOG) -g2012 -Wall -s tb_gemm -Ptb_gemm.USE_CONVENTIONAL=1 -o build/conventional-gemm/gemm.vvp $(GEMM_COMMON_RTL) $(CONVENTIONAL_RTL) tb/tb_gemm.sv > build/conventional-gemm/compile.log 2>&1 || { cat build/conventional-gemm/compile.log; exit 1; }
+	cd build/conventional-gemm && $(VVP) -l run.log gemm.vvp
+
+test-gemm-comparison: check-de2-115-vectors
+	@mkdir -p build/gemm-comparison
+	cp fpga/de2_115/inputs_a.hex fpga/de2_115/inputs_b.hex fpga/de2_115/expected.hex build/gemm-comparison/
+	$(IVERILOG) -g2012 -Wall -I fpga/de2_115 -s tb_gemm_comparison -o build/gemm-comparison/comparison.vvp $(GEMM_RTL) $(CONVENTIONAL_RTL) tb/tb_gemm_comparison.sv > build/gemm-comparison/compile.log 2>&1 || { cat build/gemm-comparison/compile.log; exit 1; }
+	cd build/gemm-comparison && $(VVP) -l run.log comparison.vvp
 
 de2-115-vectors:
 	$(PYTHON) tests/gen_gemm_vectors.py $(BOARD_VECTOR_ARGS)

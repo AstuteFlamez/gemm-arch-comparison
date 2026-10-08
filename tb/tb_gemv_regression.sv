@@ -7,7 +7,7 @@ module tb_gemv_regression;
     localparam integer WORK_CYCLES = 80;
 
     logic clk;
-    logic reset;
+    logic rst;
     logic a_we;
     logic [5:0] a_addr;
     logic signed [7:0] a_wdata;
@@ -30,7 +30,7 @@ module tb_gemv_regression;
     integer fixture_count = 0;
 
     gemv dut (
-        .clk(clk), .reset(reset),
+        .clk(clk), .rst(rst),
         .a_we(a_we), .a_addr(a_addr), .a_wdata(a_wdata),
         .x_we(x_we), .x_addr(x_addr), .x_wdata(x_wdata),
         .start(start), .busy(busy), .done(done),
@@ -64,16 +64,16 @@ module tb_gemv_regression;
                    label_text, $time, wanted_busy, wanted_done, busy, done);
     endtask
 
-    task automatic reset_core;
+    task automatic rst_core;
         @(negedge clk);
         idle_requests();
-        reset = 1'b1;
+        rst = 1'b1;
         repeat (2) begin
             tick();
             check_status(1'b0, 1'b0, "reset");
         end
         @(negedge clk);
-        reset = 1'b0;
+        rst = 1'b0;
     endtask
 
     // row 0 sums to 36, row 1 to 72, etc. with x set to all ones
@@ -245,19 +245,19 @@ module tb_gemv_regression;
 
     task automatic test_abort(
         input string state_name,
-        input integer work_edges_before_reset
+        input integer work_edges_before_rst
     );
         set_identity_case();
         load_operands();
         begin_job({"abort in ", state_name});
-        for (integer i = 0; i < work_edges_before_reset; i = i + 1) begin
+        for (integer i = 0; i < work_edges_before_rst; i = i + 1) begin
             @(negedge clk);
             idle_requests();
             tick();
             check_status(1'b1, 1'b0, "before abort");
         end
         @(negedge clk);
-        reset = 1'b1;
+        rst = 1'b1;
         start = 1'b1;
         a_we = 1'b1;
         x_we = 1'b1;
@@ -266,7 +266,7 @@ module tb_gemv_regression;
         tick();
         check_status(1'b0, 1'b0, {"reset during ", state_name});
         @(negedge clk);
-        reset = 1'b0;
+        rst = 1'b0;
         idle_requests();
         repeat (3) begin
             tick();
@@ -319,7 +319,7 @@ module tb_gemv_regression;
     endtask
 
     initial begin
-        reset = 1'b1;
+        rst = 1'b1;
         idle_requests();
         a_addr = 6'd0;
         x_addr = 3'd0;
@@ -327,7 +327,7 @@ module tb_gemv_regression;
         x_wdata = 8'sd0;
         y_rd_addr = 3'd0;
 
-        reset_core();
+        rst_core();
         set_ramp_case();
         load_operands();
         run_job("ramp rows: first result is 36", 1'b0);

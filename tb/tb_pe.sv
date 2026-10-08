@@ -3,7 +3,8 @@
 
 module tb_pe;
     logic clk = 1'b0;
-    logic reset = 1'b1;
+    logic rst = 1'b1;
+    logic clr = 1'b0;
     logic enable = 1'b0;
     logic signed [7:0] a_in = 0, b_in = 0;
     logic signed [7:0] a_out, b_out;
@@ -11,7 +12,10 @@ module tb_pe;
     integer checks = 0;
 
     pe dut (
-        .clk(clk), .reset(reset), .enable(enable),
+        .clk(clk),
+        .rst(rst),
+        .clr(clr),
+        .enable(enable),
         .a_in(a_in), .b_in(b_in),
         .a_out(a_out), .b_out(b_out),
         .acc(acc)
@@ -21,9 +25,10 @@ module tb_pe;
 
     task automatic step(
         input logic signed [7:0] next_a, next_b,
-        input logic next_enable, next_reset,
+        input logic next_enable, next_rst,
         input logic signed [31:0] expected_acc,
-        input string case_name
+        input string case_name,
+        input logic next_clr = 1'b0
     );
         logic [47:0] previous_outputs;
         logic [15:0] expected_forwarding;
@@ -33,11 +38,12 @@ module tb_pe;
         a_in = next_a;
         b_in = next_b;
         enable = next_enable;
-        reset = next_reset;
-        expected_forwarding = next_reset ? 16'd0 :
+        rst = next_rst;
+        clr = next_clr;
+        expected_forwarding = (next_rst || next_clr) ? 16'd0 :
             (next_enable ? {next_a, next_b} : {a_out, b_out});
 
-        // Data and reset must both wait for the clock.
+        // Data, reset, and clear must all wait for the clock.
         #1;
         if ({acc, a_out, b_out} !== previous_outputs)
             $fatal(1, "%s: outputs changed before the rising edge", case_name);
@@ -75,6 +81,15 @@ module tb_pe;
         step( 127,  127, 1, 0,  32258, "wide sum second pair");
         step( 127,  127, 1, 0,  48387, "sum exceeds signed 16 bits");
         step(   1,    2, 0, 1,      0, "final reset while disabled");
+
+        // Clear starts a new dot product and also discards forwarded operands.
+        step(   2,    3, 1, 0,      6, "prepare clear while disabled");
+        step(   9,    9, 0, 0,      0, "clear while disabled", 1);
+        step(   4,    5, 1, 0,     20, "resume after clear");
+        step(   9,    9, 1, 0,      0, "clear overrides enable", 1);
+        step(   8,    7, 1, 0,      0, "held clear", 1);
+        step(   9,    9, 1, 1,      0, "reset and clear together", 1);
+        step(  -3,    6, 1, 0,    -18, "resume after held clear");
 
         $display("PASS: PE initial reset and %0d cycle checks completed", checks);
         $finish;

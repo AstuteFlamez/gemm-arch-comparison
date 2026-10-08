@@ -5,7 +5,7 @@ module tb_de2_115_gemm;
     `include "gemm_vectors.svh"
     localparam integer VECTOR_WORDS = CASE_COUNT * 64;
     localparam integer SUITE_LIMIT = CASE_COUNT * 900 + 100;
-    logic CLOCK_50 = 0;
+    logic clk = 0;
     logic [1:0] KEY = 2'b11;
     logic LED_READY, LED_BUSY, LED_PASS, LED_FAIL;
     integer jobs_started = 0;
@@ -25,7 +25,7 @@ module tb_de2_115_gemm;
         $readmemh("inputs_b.hex", vectors_b);
     end
 
-    always #10 CLOCK_50 = ~CLOCK_50;
+    always #10 clk = ~clk;
     de2_115_gemm_top dut (.*);
 
     // Mathematical oracle independent of the stored expected.hex words.
@@ -42,8 +42,8 @@ module tb_de2_115_gemm;
     endfunction
 
     // Observe what the core samples, before nonblocking updates at each edge.
-    always @(posedge CLOCK_50) begin
-        if (dut.core_reset) begin
+    always @(posedge clk) begin
+        if (dut.core_rst) begin
             loads = 0;
             checks = 0;
             suite_jobs = 0;
@@ -51,23 +51,23 @@ module tb_de2_115_gemm;
         end else begin
             if (dut.load_we) begin
                 if (dut.core_busy || suite_jobs >= CASE_COUNT ||
-                    suite_checks != suite_jobs*64 || dut.case_index !== suite_jobs ||
-                    loads >= 64 || dut.word_index !== loads ||
-                    dut.a_value !== vectors_a[suite_jobs*64 + loads] ||
-                    dut.b_value !== vectors_b[suite_jobs*64 + loads])
+                    suite_checks != suite_jobs*64 || dut.case_index_q !== suite_jobs ||
+                    loads >= 64 || dut.word_index_q !== loads ||
+                    dut.a_value_q !== vectors_a[suite_jobs*64 + loads] ||
+                    dut.b_value_q !== vectors_b[suite_jobs*64 + loads])
                     $fatal(1, "incorrect operand load at case %0d index %0d", suite_jobs, loads);
                 loads = loads + 1;
             end
             if (dut.core_start) begin
-                if (loads != 64 || dut.core_busy || dut.case_index !== suite_jobs)
+                if (loads != 64 || dut.core_busy || dut.case_index_q !== suite_jobs)
                     $fatal(1, "GEMM started before loading both matrices");
                 jobs_started = jobs_started + 1;
                 suite_jobs = suite_jobs + 1;
                 loads = 0;
                 checks = 0;
             end
-            if (dut.state == dut.CHECK_C && !injecting_fault) begin
-                if (dut.case_index !== suite_jobs - 1 || dut.word_index !== checks ||
+            if (dut.state_q == dut.CHECK_C && !injecting_fault) begin
+                if (dut.case_index_q !== suite_jobs - 1 || dut.word_index_q !== checks ||
                     dut.c_value !== reference(suite_jobs - 1, checks))
                     $fatal(1, "incorrect readback at case %0d C[%0d]", suite_jobs - 1, checks);
                 checks = checks + 1;
@@ -78,13 +78,13 @@ module tb_de2_115_gemm;
     end
 
     task automatic tick;
-        @(posedge CLOCK_50); #1;
+        @(posedge clk); #1;
     endtask
 
     task automatic press_start;
         if (LED_READY !== 1)
             $fatal(1, "board must be ready before a new test");
-        @(negedge CLOCK_50);
+        @(negedge clk);
         KEY[1] = 0;
         repeat (5) tick();
         if ({LED_READY, LED_BUSY, LED_PASS, LED_FAIL} !== 4'b0100)
@@ -92,7 +92,7 @@ module tb_de2_115_gemm;
     endtask
 
     task automatic release_start;
-        @(negedge CLOCK_50);
+        @(negedge clk);
         KEY[1] = 1;
         repeat (4) tick();
     endtask
@@ -116,14 +116,14 @@ module tb_de2_115_gemm;
         end
     endtask
 
-    task automatic reset_board;
-        @(negedge CLOCK_50);
+    task automatic rst_board;
+        @(negedge clk);
         KEY = 2'b10;
         #1;
         if ({LED_READY, LED_BUSY, LED_PASS, LED_FAIL} !== 0)
             $fatal(1, "reset did not suppress LEDs immediately");
         repeat (3) tick();
-        @(negedge CLOCK_50);
+        @(negedge clk);
         KEY = 2'b11;
         repeat (4) tick();
         if ({LED_READY, LED_BUSY, LED_PASS, LED_FAIL} !== 4'b1000)
@@ -158,7 +158,7 @@ module tb_de2_115_gemm;
         press_start();
         release_start();
         repeat (80) tick();
-        @(negedge CLOCK_50);
+        @(negedge clk);
         KEY[1] = 0;
         await_result(1);
         previous_jobs = jobs_started;
@@ -174,9 +174,9 @@ module tb_de2_115_gemm;
             fault_word = (which == 0) ? 0 : ((which == 1) ? 31 : 63);
             press_start();
             release_start();
-            while (dut.state !== dut.CHECK_C || dut.case_index != fault_case ||
-                   dut.word_index != fault_word)
-                @(negedge CLOCK_50);
+            while (dut.state_q !== dut.CHECK_C || dut.case_index_q != fault_case ||
+                   dut.word_index_q != fault_word)
+                @(negedge clk);
             injecting_fault = 1;
             force dut.c_value = 32'sh12345678;
             previous_jobs = jobs_started;
@@ -192,8 +192,8 @@ module tb_de2_115_gemm;
         // Verify the board reports a stalled core and can run again afterward.
         press_start();
         release_start();
-        while (dut.case_index != CASE_COUNT/2 || dut.state != dut.WAIT_CORE)
-            @(negedge CLOCK_50);
+        while (dut.case_index_q != CASE_COUNT/2 || dut.state_q != dut.WAIT_CORE)
+            @(negedge clk);
         force dut.core_done = 1'b0;
         await_result(0, 5000);
         release dut.core_done;
@@ -204,7 +204,7 @@ module tb_de2_115_gemm;
         // Reset during input loading, then during different GEMM phases and
         // result reads. Each restart must refill the FIFOs and recompute C.
         press_start();
-        reset_board();
+        rst_board();
         abort_offsets[0] = 0;
         abort_offsets[1] = 9;
         abort_offsets[2] = 20;
@@ -216,7 +216,7 @@ module tb_de2_115_gemm;
             release_start();
             wait (dut.core_busy === 1);
             repeat (abort_offsets[i]) tick();
-            reset_board();
+            rst_board();
             press_start();
             release_start();
             await_result(1);
@@ -226,13 +226,13 @@ module tb_de2_115_gemm;
         // case zero, with fresh input loads and no stale PASS or case counter.
         press_start();
         release_start();
-        while (dut.case_index != CASE_COUNT-1 || dut.state != dut.READ_INPUT)
-            @(negedge CLOCK_50);
-        reset_board();
+        while (dut.case_index_q != CASE_COUNT-1 || dut.state_q != dut.READ_INPUT)
+            @(negedge clk);
+        rst_board();
         press_start();
         release_start();
         await_result(1);
-        reset_board();
+        rst_board();
 
         $display("PASS: %0d full suites; %0d total output checks", suites_passed, total_checks);
         $display("PASS: DE2-115 power-up, consecutive pairs, sticky LEDs, held/busy button behavior");

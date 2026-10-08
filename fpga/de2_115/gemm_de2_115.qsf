@@ -19,14 +19,14 @@ set_global_assignment -name SYSTEMVERILOG_FILE de2_115_gemm_top.sv
 
 # Keep unconnected board peripherals undriven. Only the listed pins are used.
 set_global_assignment -name RESERVE_ALL_UNUSED_PINS "AS INPUT TRI-STATED"
-set_instance_assignment -name SYNCHRONIZER_IDENTIFICATION FORCED -to start_meta
-set_instance_assignment -name SYNCHRONIZER_IDENTIFICATION FORCED -to start_sync
-set_instance_assignment -name SYNCHRONIZER_IDENTIFICATION FORCED -to {reset_pipe[*]}
+set_instance_assignment -name SYNCHRONIZER_IDENTIFICATION FORCED -to start_meta_q
+set_instance_assignment -name SYNCHRONIZER_IDENTIFICATION FORCED -to start_sync_q
+set_instance_assignment -name SYNCHRONIZER_IDENTIFICATION FORCED -to {rst_pipe_q[*]}
 
 # Terasic manual tables 4-2, 4-3, and 4-5. KEY voltage assumes JP7 at 2.5 V.
 # https://www.terasic.com.tw/attachment/archive/502/DE2_115_User_manual.pdf
-set_location_assignment PIN_Y2 -to CLOCK_50
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to CLOCK_50
+set_location_assignment PIN_Y2 -to clk
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to clk
 set_location_assignment PIN_M23 -to {KEY[0]}
 set_location_assignment PIN_M21 -to {KEY[1]}
 set_instance_assignment -name IO_STANDARD "2.5 V" -to {KEY[0]}

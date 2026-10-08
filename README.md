@@ -1,10 +1,11 @@
 # RTL Learning Projects
 
-Small SystemVerilog projects building toward an 8×8 GEMM using a 2×2 systolic array.
+Small SystemVerilog projects comparing 8×8 GEMM with a 2×2 systolic array
+and a conventional four-MAC implementation.
 
 ## GEMM architecture
 
-The GEMM core reuses one 2×2 systolic array across 16 output tiles. The top-level
+The systolic GEMM core reuses one 2×2 systolic array across 16 output tiles. The top-level
 controller selects each tile; the systolic tile controller loads four FIFOs,
 runs the array, and writes its four results to C SRAM.
 
@@ -20,6 +21,54 @@ The core handles one A/B matrix pair at a time. After completion, read C, load
 the next pair, and assert `start` again; no reset is required between jobs.
 There is one set of operand memories, so loading the next pair cannot overlap
 the current computation. Host writes while `busy` are ignored.
+
+## Conventional four-MAC baseline
+
+[`conventional_gemm.sv`](rtl/gemm/conventional_matmul/conventional_gemm.sv)
+uses the same host interface, top-level tile sequencer, SRAM wrapper, four
+eight-word FIFOs, and signed INT8-to-INT32 MAC module. The difference is how
+operands reach the four MACs: direct fanout sends each A/B value to two MACs,
+and all four outputs accumulate the same `k` in parallel.
+
+![Conventional four-MAC GEMM with direct operand fanout](docs/naive-matmul.svg)
+
+Start reading at
+[`conventional_tile_controller.sv`](rtl/gemm/conventional_matmul/conventional_tile_controller.sv).
+Its phases are `IDLE → LOAD_FIFO → COMPUTE → STORE → FINISH`:
+
+- `LOAD_FIFO`: 17 clocks to fill the FIFOs from synchronous SRAM; clear all four
+  accumulators on the first loading edge.
+- `COMPUTE`: one clock to prime the registered FIFO outputs, then eight clocks
+  of accumulation. All four FIFOs pop together; all four MACs finish together.
+- `STORE`: four clocks to write C00, C01, C10, C11 through C SRAM's single port.
+- `FINISH`: pulse tile completion for the shared top-level controller.
+
+The tile controller asserts `done` 30 clocks after accepting its tile request.
+Including the top-level launch and completion handshake, each tile takes 32
+clocks: 16 tiles × 32 = **512 clocks per full matrix**, versus **544 clocks**
+for the systolic core. These counts run from accepted `start` to `done` and
+exclude host loading and result readback. Both cores handle consecutive jobs
+without reset, one A/B pair at a time.
+
+Run the conventional tile test, shared host-protocol regression, and comparison:
+
+```sh
+make test-conventional-tile-controller
+make test-conventional-gemm
+make test-gemm-comparison
+```
+
+The tile test checks 32 consecutive tiles, intermediate accumulation, writeback,
+and reset. Both `make test-gemm` and `make test-conventional-gemm` use the same
+testbench: 44 completed jobs, 2,817 output checks, and 11 reset/restart cases.
+The comparison feeds both cores the FPGA demo's identical 10 directed + 100
+seeded random pairs, independently recomputes the reference results, and checks
+all 7,040 outputs per core without resetting between pairs.
+
+This establishes functional agreement and cycle counts for these implementations.
+FPGA clock frequency, resource usage, and power still require synthesis,
+implementation, and power analysis with matching settings and workloads.
+The existing DE2-115 project currently instantiates the systolic core.
 
 ## FPGA demo
 
@@ -43,6 +92,8 @@ lab PC. FPGA timing and board operation still require verification there.
 | DONE | [systolic_tile_controller.sv](rtl/gemm/systolic_array/systolic_tile_controller.sv) | Load four FIFOs; stagger pops and validity; write four results |
 | DONE | [top_level_controller.sv](rtl/gemm/top_level_controller.sv) | Sequence 16 tiles; wait for tile completion; maintain busy and sticky done |
 | DONE | [systolic_gemm.sv](rtl/gemm/systolic_array/systolic_gemm.sv) | Connect both controllers, four FIFOs, SRAMs, and the array; full 8×8 GEMM verified |
+| DONE | [conventional_tile_controller.sv](rtl/gemm/conventional_matmul/conventional_tile_controller.sv) | Load FIFOs, pop in lockstep, enable eight MAC steps, store four results; simulated |
+| DONE | [conventional_gemm.sv](rtl/gemm/conventional_matmul/conventional_gemm.sv) | Direct fanout to four MACs; same arithmetic/protocol tests and FPGA fixture comparison pass |
 | LATER | [gemv.sv](rtl/gemv/gemv.sv) | Existing GEMV works; SRAM conversion |
 
 ## Repository layout
@@ -56,11 +107,14 @@ lab PC. FPGA timing and board operation still require verification there.
 │   │   ├── <a href="rtl/gemm/memory/">memory/</a>
 │   │   │   ├── <a href="rtl/gemm/memory/sram.sv">sram.sv</a>
 │   │   │   └── <a href="rtl/gemm/memory/memory_wrapper.sv">memory_wrapper.sv</a>
-│   │   └── <a href="rtl/gemm/systolic_array/">systolic_array/</a>
-│   │       ├── <a href="rtl/gemm/systolic_array/pe.sv">pe.sv</a>
-│   │       ├── <a href="rtl/gemm/systolic_array/systolic_array.sv">systolic_array.sv</a>
-│   │       ├── <a href="rtl/gemm/systolic_array/systolic_tile_controller.sv">systolic_tile_controller.sv</a>
-│   │       └── <a href="rtl/gemm/systolic_array/systolic_gemm.sv">systolic_gemm.sv</a>
+│   │   ├── <a href="rtl/gemm/systolic_array/">systolic_array/</a>
+│   │   │   ├── <a href="rtl/gemm/systolic_array/pe.sv">pe.sv</a>
+│   │   │   ├── <a href="rtl/gemm/systolic_array/systolic_array.sv">systolic_array.sv</a>
+│   │   │   ├── <a href="rtl/gemm/systolic_array/systolic_tile_controller.sv">systolic_tile_controller.sv</a>
+│   │   │   └── <a href="rtl/gemm/systolic_array/systolic_gemm.sv">systolic_gemm.sv</a>
+│   │   └── <a href="rtl/gemm/conventional_matmul/">conventional_matmul/</a>
+│   │       ├── <a href="rtl/gemm/conventional_matmul/conventional_tile_controller.sv">conventional_tile_controller.sv</a>
+│   │       └── <a href="rtl/gemm/conventional_matmul/conventional_gemm.sv">conventional_gemm.sv</a>
 │   └── <a href="rtl/gemv/">gemv/</a>
 │       └── <a href="rtl/gemv/gemv.sv">gemv.sv</a>
 ├── <a href="tb/">tb/</a>          # SystemVerilog testbenches

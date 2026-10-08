@@ -18,7 +18,7 @@ module tb_sram;
 
     sram #(.DATA_WIDTH(DATA_WIDTH), .DEPTH(DEPTH)) dut (
         .clk(clk), .re(re), .we(we),
-        .addr(addr), .wdata(wdata), .rdata(rdata)
+        .addr(addr), .wr_data(wdata), .rd_data(rdata)
     );
 
     // A 10 ns clock period. Delays belong in the testbench, not the RAM RTL.

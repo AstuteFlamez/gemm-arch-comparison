@@ -1,9 +1,9 @@
 `timescale 1ns/1ps
 module tb_systolic_tile_controller;
-    logic clk = 0, reset = 1, start = 0;
+    logic clk = 0, rst = 1, start = 0;
     always #5 clk = ~clk;
     logic [2:0] tile_row = 0, tile_col = 0;
-    logic done, ab_re, array_clear, array_enable, c_we;
+    logic done, ab_re, array_clr, array_enable, c_we;
     logic [5:0] a_rd_addr, b_rd_addr, c_wr_addr;
     logic [1:0] fifo_push, fifo_pop, fifo_valid, c_sel;
     logic host_we = 0;
@@ -32,9 +32,9 @@ module tb_systolic_tile_controller;
     sram #(.DATA_WIDTH(32), .DEPTH(64)) mc(
         .clk(clk), .re(c_read_en), .we(c_we),
         .addr(c_we ? c_wr_addr : c_read_addr),
-        .wdata(c_write_data), .rdata(c_read_data));
+        .wr_data(c_write_data), .rd_data(c_read_data));
     always @(posedge clk) begin
-        if (!reset && c_we) begin
+        if (!rst && c_we) begin
             write_edges = write_edges + 1;
             if (done || array_enable || fifo_pop != 0 || fifo_push != 0)
                 $fatal(1, "unexpected control during writeback");
@@ -43,19 +43,19 @@ module tb_systolic_tile_controller;
     systolic_tile_controller dut (.*);
     sram #(.DATA_WIDTH(8), .DEPTH(64)) ma(
         .clk(clk), .re(ab_re), .we(host_we),
-        .addr(host_we ? host_addr : a_rd_addr), .wdata(aw), .rdata(ar));
+        .addr(host_we ? host_addr : a_rd_addr), .wr_data(aw), .rd_data(ar));
     sram #(.DATA_WIDTH(8), .DEPTH(64)) mb(
         .clk(clk), .re(ab_re), .we(host_we),
-        .addr(host_we ? host_addr : b_rd_addr), .wdata(bw), .rdata(br));
-    fifo fa0(.clk(clk), .reset(reset), .push(fifo_push[0]),
+        .addr(host_we ? host_addr : b_rd_addr), .wr_data(bw), .rd_data(br));
+    fifo fa0(.clk(clk), .rst(rst), .push(fifo_push[0]),
         .pop(fifo_pop[0]), .data_in(ar), .data_out(aq0), .full(), .empty());
-    fifo fa1(.clk(clk), .reset(reset), .push(fifo_push[1]),
+    fifo fa1(.clk(clk), .rst(rst), .push(fifo_push[1]),
         .pop(fifo_pop[1]), .data_in(ar), .data_out(aq1), .full(), .empty());
-    fifo fb0(.clk(clk), .reset(reset), .push(fifo_push[0]),
+    fifo fb0(.clk(clk), .rst(rst), .push(fifo_push[0]),
         .pop(fifo_pop[0]), .data_in(br), .data_out(bq0), .full(), .empty());
-    fifo fb1(.clk(clk), .reset(reset), .push(fifo_push[1]),
+    fifo fb1(.clk(clk), .rst(rst), .push(fifo_push[1]),
         .pop(fifo_pop[1]), .data_in(br), .data_out(bq1), .full(), .empty());
-    systolic_array array_inst(.clk(clk), .reset(reset | array_clear),
+    systolic_array array_inst(.clk(clk), .rst(rst), .clr(array_clr),
         .enable(array_enable),
         .A0(fifo_valid[0] ? aq0 : 8'sd0),
         .A1(fifo_valid[1] ? aq1 : 8'sd0),
@@ -82,7 +82,7 @@ module tb_systolic_tile_controller;
         random_init = $urandom(seed);
         @(posedge clk); #1;
         @(negedge clk);
-        reset = 0;
+        rst = 0;
         for (integer trial = 0; trial < 32; trial = trial + 1) begin
             tile_row = 2*((trial/4)%4);
             tile_col = 2*(trial%4);
@@ -104,16 +104,16 @@ module tb_systolic_tile_controller;
                 @(negedge clk);
                 start = 0;
                 repeat (9) @(negedge clk);
-                reset = 1;
+                rst = 1;
                 #1;
-                if ({ab_re, fifo_push, fifo_pop, fifo_valid, array_clear,
+                if ({ab_re, fifo_push, fifo_pop, fifo_valid, array_clr,
                      array_enable, c_we, done} !== 0)
                     $fatal(1, "memory/array operations were not gated during reset");
                 @(posedge clk); #1;
-                if (dut.state !== dut.IDLE)
+                if (dut.state_q !== dut.IDLE)
                     $fatal(1, "reset did not return controller to IDLE");
                 @(negedge clk);
-                reset = 0;
+                rst = 0;
             end
             start = 1;
             @(posedge clk);
@@ -136,7 +136,7 @@ module tb_systolic_tile_controller;
             end
             if (pops0 != 8 || pops1 != 8 || enabled != 10)
                 $fatal(1, "unexpected pop/enable counts");
-            if (dut.state !== dut.STORE) $fatal(1, "did not enter STORE");
+            if (dut.state_q !== dut.STORE) $fatal(1, "did not enter STORE");
             for (integer result = 0; result < 4; result = result + 1) begin
                 @(negedge clk);
                 if (c_we !== 1 || c_sel !== result || done !== 0)
@@ -157,7 +157,7 @@ module tb_systolic_tile_controller;
             if (c_we !== 0 || write_edges != (trial+1)*4)
                 $fatal(1, "incorrect write count at completion");
             @(posedge clk); #1;
-            if (done !== 0 || c_we !== 0 || dut.state !== dut.IDLE)
+            if (done !== 0 || c_we !== 0 || dut.state_q !== dut.IDLE)
                 $fatal(1, "done did not pulse for exactly one cycle and return to IDLE");
             for (integer result = 0; result < 4; result = result + 1) begin
                 @(negedge clk);

@@ -2,20 +2,20 @@
 `default_nettype none
 
 module tb_gemm_controller;
-    logic clk = 0, reset = 1, start = 1;
+    logic clk = 0, rst = 1, start = 1;
     logic busy, done, tile_start, tile_done, memory_done;
     logic [2:0] tile_row, tile_col;
-    logic ab_re, array_clear, array_enable, c_we;
+    logic ab_re, array_clr, array_enable, c_we;
     logic [5:0] a_rd_addr, b_rd_addr, c_wr_addr;
     logic [1:0] fifo_push, fifo_pop, fifo_valid, c_sel;
     logic block_done = 0, manual_done = 0;
     integer completed_jobs = 0;
-    integer reset_offsets [0:8];
+    integer rst_offsets [0:8];
 
     always #5 clk = ~clk;
 
     top_level_controller dut (
-        .clk(clk), .reset(reset), .start(start), .busy(busy), .done(done),
+        .clk(clk), .rst(rst), .start(start), .busy(busy), .done(done),
         .tile_done(tile_done), .tile_start(tile_start),
         .tile_row(tile_row), .tile_col(tile_col)
     );
@@ -23,11 +23,11 @@ module tb_gemm_controller;
     // Use the real tile controller to verify the FINISH/start handoff.
     // Arithmetic and FIFO data are checked by test-systolic-tile-controller.
     systolic_tile_controller tile_controller (
-        .clk(clk), .reset(reset), .start(tile_start),
+        .clk(clk), .rst(rst), .start(tile_start),
         .tile_row(tile_row), .tile_col(tile_col), .done(memory_done),
         .ab_re(ab_re), .a_rd_addr(a_rd_addr), .b_rd_addr(b_rd_addr),
         .fifo_push(fifo_push), .fifo_pop(fifo_pop), .fifo_valid(fifo_valid),
-        .array_clear(array_clear), .array_enable(array_enable),
+        .array_clr(array_clr), .array_enable(array_enable),
         .c_we(c_we), .c_wr_addr(c_wr_addr), .c_sel(c_sel)
     );
 
@@ -138,15 +138,15 @@ module tb_gemm_controller;
         completed_jobs = completed_jobs + 1;
     endtask
 
-    task automatic apply_reset;
+    task automatic apply_rst;
         @(negedge clk);
-        reset = 1;
+        rst = 1;
         start = 1;
         manual_done = 1; // Reset must override both request and completion.
         block_done = 0;
         #1;
         if ({tile_start, ab_re, fifo_push, fifo_pop, fifo_valid,
-             array_clear, array_enable, c_we} !== 0)
+             array_clr, array_enable, c_we} !== 0)
             $fatal(1, "operations were not gated during reset");
         repeat (2) begin
             @(posedge clk); #1;
@@ -155,7 +155,7 @@ module tb_gemm_controller;
                 $fatal(1, "reset did not select tile (0,0)");
         end
         @(negedge clk);
-        reset = 0;
+        rst = 0;
         start = 0;
         manual_done = 0;
         idle_edges(1, 0);
@@ -167,7 +167,7 @@ module tb_gemm_controller;
             check_idle(0);
         end
         @(negedge clk);
-        reset = 0;
+        rst = 0;
         start = 0;
         idle_edges(2, 0);
 
@@ -199,27 +199,27 @@ module tb_gemm_controller;
 
         // Abort before launch, during loading/compute/store, while tile_done is
         // high, and just before the full matrix would finish. Restart each time.
-        reset_offsets[0] = 0;
-        reset_offsets[1] = 1;
-        reset_offsets[2] = 9;
-        reset_offsets[3] = 18;
-        reset_offsets[4] = 27;
-        reset_offsets[5] = 29;
-        reset_offsets[6] = 32;
-        reset_offsets[7] = 33;
-        reset_offsets[8] = 543;
+        rst_offsets[0] = 0;
+        rst_offsets[1] = 1;
+        rst_offsets[2] = 9;
+        rst_offsets[3] = 18;
+        rst_offsets[4] = 27;
+        rst_offsets[5] = 29;
+        rst_offsets[6] = 32;
+        rst_offsets[7] = 33;
+        rst_offsets[8] = 543;
         for (integer i = 0; i < 9; i = i + 1) begin
             begin_job();
-            repeat (reset_offsets[i]) begin
+            repeat (rst_offsets[i]) begin
                 @(negedge clk);
                 start = 0;
                 @(posedge clk); #1;
             end
-            apply_reset();
+            apply_rst();
             begin_job();
-            finish_job($sformatf("restart after reset at edge %0d", reset_offsets[i]));
+            finish_job($sformatf("restart after reset at edge %0d", rst_offsets[i]));
         end
-        apply_reset(); // Reset also clears sticky done while idle.
+        apply_rst(); // Reset also clears sticky done while idle.
 
         $display("PASS: top-level controller completed %0d jobs; 16 ordered tiles and 64 writes per job",
                  completed_jobs);

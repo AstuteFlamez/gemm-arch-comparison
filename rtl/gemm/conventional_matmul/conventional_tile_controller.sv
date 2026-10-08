@@ -1,23 +1,32 @@
+`timescale 1ns/1ps
+`default_nettype none
+
+// Fixed 2x2 tile schedule on clk with synchronous active-high reset.
+// Start is accepted only in IDLE; tile_row/tile_col must be even bases in 0..6.
+// SRAM reads and FIFO pops are registered; done pulses after all four C writes.
+// Global reset must also clear the attached FIFOs and datapath when aborting a tile.
 module conventional_tile_controller (
-    input logic clk, reset,
+    input  logic clk,
+    input  logic rst,
 
     // Request one 2×2 output tile
     input  logic start,
-    input  logic [2:0] tile_row, tile_col,
+    input  logic [2:0] tile_row,
+    input  logic [2:0] tile_col,
     output logic done, // 1-cycle pulse after STORE
 
     // Read A/B SRAMs
     output logic ab_re,
-    output logic [5:0] a_rd_addr, b_rd_addr,
+    output logic [5:0] a_rd_addr,
+    output logic [5:0] b_rd_addr,
 
     // Bit 0 controls A0/B0; bit 1 controls A1/B1; 11 enables both pairs
     output logic [1:0] fifo_push,
     output logic [1:0] fifo_pop,
-    output logic [1:0] fifo_valid,
 
-    // Control the array
-    output logic array_clear,
-    output logic array_enable,
+    // All four MACs clear and accumulate together (parallel)
+    output logic mac_clr,
+    output logic mac_enable,
 
     // Write one of the four results to C SRAM
     output logic c_we,
@@ -25,87 +34,105 @@ module conventional_tile_controller (
     output logic [1:0] c_sel
 );
 
+    localparam int MATRIX_DIM         = 8;
+    localparam int TILE_DIM           = 2;
+    localparam int TILE_OUTPUTS       = TILE_DIM * TILE_DIM;
+    localparam int LOAD_LAST_CYCLE    = TILE_DIM * MATRIX_DIM;
+    localparam int COMPUTE_LAST_CYCLE = MATRIX_DIM;
+    localparam int STORE_LAST_CYCLE   = TILE_OUTPUTS - 1;
+
     typedef enum logic [2:0] {
         IDLE,
         LOAD_FIFO,
-        COMPUTE_SYSTOLIC_ARRAY,
+        COMPUTE,
         STORE,
         FINISH
-    } state_t;
-    state_t state;
+    } state_e;
+    state_e state_q;
 
-    logic [4:0] cycle;      // LOAD_FIFO 0–16, COMPUTE_SYSTOLIC_ARRAY 0–10, STORE 0–3
-    logic [2:0] row_base, col_base;        
+    logic [4:0] phase_cycle_q; // LOAD_FIFO 0–16, COMPUTE 0–8, STORE 0–3
+    logic [2:0] tile_row_q;
+    logic [2:0] tile_col_q;
 
+    // Capture the tile coordinates once; later input changes do not affect this tile.
     always_ff @(posedge clk) begin
-        if (reset) begin
-            state    <= IDLE;
-            cycle    <= 0;
-            row_base <= 0;
-            col_base <= 0;
+        if (rst) begin
+            state_q       <= IDLE;
+            phase_cycle_q <= '0;
+            tile_row_q    <= '0;
+            tile_col_q    <= '0;
         end else begin
-            case (state)
+            case (state_q)
                 IDLE: begin
                     if (start) begin
-                        row_base <= tile_row;
-                        col_base <= tile_col;
-                        cycle    <= 0;
-                        state    <= LOAD_FIFO;
+                        tile_row_q    <= tile_row;
+                        tile_col_q    <= tile_col;
+                        phase_cycle_q <= '0;
+                        state_q       <= LOAD_FIFO;
                     end
                 end
 
                 LOAD_FIFO: begin
-                    if (cycle == 16) begin
-                        cycle <= 0;
-                        state <= COMPUTE_SYSTOLIC_ARRAY;
+                    if (phase_cycle_q == LOAD_LAST_CYCLE) begin
+                        phase_cycle_q <= '0;
+                        state_q       <= COMPUTE;
                     end else begin
-                        cycle <= cycle + 1;
+                        phase_cycle_q <= phase_cycle_q + 1'b1;
                     end
                 end
 
-                COMPUTE_SYSTOLIC_ARRAY: begin
-                    if (cycle == 10) begin
-                        cycle <= 0;
-                        state <= STORE;
+                COMPUTE: begin
+                    if (phase_cycle_q == COMPUTE_LAST_CYCLE) begin
+                        phase_cycle_q <= '0;
+                        state_q       <= STORE;
                     end else begin
-                        cycle <= cycle + 1;
+                        phase_cycle_q <= phase_cycle_q + 1'b1;
                     end
                 end
 
                 STORE: begin
-                    if (cycle == 3)
-                        state <= FINISH;
-                    else
-                        cycle <= cycle + 1;
+                    if (phase_cycle_q == STORE_LAST_CYCLE) begin
+                        state_q <= FINISH;
+                    end else begin
+                        phase_cycle_q <= phase_cycle_q + 1'b1;
+                    end
                 end
 
                 FINISH: begin
                     // Spend one clock cycle with done high, then return to IDLE.
-                    state <= IDLE;
+                    state_q <= IDLE;
                 end
 
                 default: begin
-                    state <= IDLE;
+                    state_q <= IDLE;
                 end
             endcase
         end
     end
 
     always_comb begin
-        // During LOAD_FIFO, bit 3 selects the pair; bits 2:0 select element 0–7
-        a_rd_addr = (row_base + cycle[3]) * 8 + cycle[2:0];
-        b_rd_addr = cycle[2:0] * 8 + col_base + cycle[3];
+        // During LOAD_FIFO, bit 3 selects the pair; bits 2:0 select element 0–7.
+        // Legal tile bases keep the address calculations within the 6-bit ports.
+        a_rd_addr = (tile_row_q + phase_cycle_q[3]) * MATRIX_DIM + phase_cycle_q[2:0];
+        b_rd_addr = phase_cycle_q[2:0] * MATRIX_DIM + tile_col_q + phase_cycle_q[3];
 
-        // Default:
-        {ab_re, fifo_push, fifo_pop, fifo_valid, array_clear,
-         array_enable, c_we, c_wr_addr, c_sel, done} = 0;
+        // Disable all operations unless the current phase explicitly enables them.
+        ab_re      = '0;
+        fifo_push  = '0;
+        fifo_pop   = '0;
+        mac_clr    = '0;
+        mac_enable = '0;
+        c_we       = '0;
+        c_wr_addr  = '0;
+        c_sel      = '0;
+        done       = '0;
 
-        if (!reset) begin
-            case (state)
+        if (!rst) begin
+            case (state_q)
                 LOAD_FIFO: begin
                     /*
                     Cycle 0: Read the first A0/B0 values from SRAM. No push yet.
-                    Also clear the array.
+                    Also clear all four MAC accumulators for the new tile.
 
                     Cycle 1: Push those first values into A0/B0's FIFOs while
                     reading their second values.
@@ -120,70 +147,63 @@ module conventional_tile_controller (
                     values and pushing the previous ones.
 
                     Cycle 16: Push A1/B1's last values. No new read. All four
-                    FIFOs are full, so enter COMPUTE_SYSTOLIC_ARRAY cycle 0.
+                    FIFOs are full, so enter COMPUTE cycle 0.
 
-                    The array stays disabled throughout loading.
+                    The MACs stay disabled throughout loading.
                     */
-                    array_clear = (cycle == 0);
-                    ab_re = (cycle < 16);
+                    mac_clr = (phase_cycle_q == '0);
+                    ab_re     = (phase_cycle_q < LOAD_LAST_CYCLE);
 
-                    if (cycle >= 1 && cycle <= 8)
-                        fifo_push[0] = 1;
-                    if (cycle >= 9 && cycle <= 16)
-                        fifo_push[1] = 1;
+                    if (phase_cycle_q >= 5'd1 && phase_cycle_q <= MATRIX_DIM) begin
+                        fifo_push[0] = 1'b1;
+                    end
+                    if (phase_cycle_q >= MATRIX_DIM + 1 && phase_cycle_q <= LOAD_LAST_CYCLE) begin
+                        fifo_push[1] = 1'b1;
+                    end
                 end
 
-                COMPUTE_SYSTOLIC_ARRAY: begin
+                COMPUTE: begin
                     /*
-                    Cycle 0: Pop the first A0/B0 values. Keep the array disabled
-                    while the FIFO outputs update.
+                    Cycle 0: Pop k=0 from all four FIFOs. Keep the MACs
+                    disabled while the registered FIFO outputs update.
 
-                    Cycle 1: Feed those first A0/B0 values into the array while
-                    popping their next values and A1/B1's first values.
-                    The A1/B1 array inputs are still zero.
+                    Cycles 1–7: All four MACs consume k=cycle-1 while the
+                    FIFOs pop the next k. Each A value feeds two MACs, and
+                    each B value feeds two MACs. There is no operand skew
+                    or forwarding between MACs.
 
-                    Cycles 2–7: Feed both pairs into the array while popping
-                    their next values. A1/B1 stay one element behind A0/B0 so
-                    matching values meet as A moves right and B moves down.
+                    Cycle 8: Consume k=7 with no further pops. All four
+                    accumulators finish together, then enter STORE.
 
-                    Cycle 8: Feed A0/B0's last values and A1/B1's second-to-last
-                    values. Stop popping A0/B0; pop A1/B1's last values.
-                    C00 finishes its calculation.
-
-                    Cycle 9: Feed A1/B1's last values. A0/B0 inputs are zero.
-                    No more pops. C01 and C10 finish their calculations.
-
-                    Cycle 10: Feed zeros into all four array inputs, but keep
-                    the array enabled so C11 can finish using the last values
-                    from its neighbors. Then enter STORE cycle 0.
+                    This gives eight pops and eight multiply-accumulates
+                    per FIFO/MAC. Disabled MACs hold their results, so no
+                    validity masks or zero-padding cycles are needed.
                     */
-                    fifo_pop[0] = (cycle < 8);
-                    fifo_pop[1] = (cycle >= 1 && cycle <= 8);
-
-                    fifo_valid[0] = (cycle >= 1 && cycle <= 8);
-                    fifo_valid[1] = (cycle >= 2 && cycle <= 9);
-
-                    array_enable = (cycle >= 1);
+                    fifo_pop   = (phase_cycle_q < MATRIX_DIM) ? 2'b11 : 2'b00;
+                    mac_enable = (phase_cycle_q >= 5'd1 && phase_cycle_q <= MATRIX_DIM);
                 end
 
                 STORE: begin
                     /*
-                    Keep the array disabled so its four results hold steady.
+                    Keep the MACs disabled so their four results hold steady.
 
-                    Cycle 0: Write C00 to C[row_base][col_base].
-                    Cycle 1: Write C01 to C[row_base][col_base + 1].
-                    Cycle 2: Write C10 to C[row_base + 1][col_base].
-                    Cycle 3: Write C11 to C[row_base + 1][col_base + 1].
+                    Here r = tile_row_q and c = tile_col_q.
+
+                    Cycle 0: Write C00 to C[r][c].
+                    Cycle 1: Write C01 to C[r][c + 1].
+                    Cycle 2: Write C10 to C[r + 1][c].
+                    Cycle 3: Write C11 to C[r + 1][c + 1].
                     All four results are stored, so enter FINISH.
                     */
-                    c_we = 1;
-                    c_sel = cycle[1:0];
-                    c_wr_addr = (row_base + cycle[1]) * 8 + col_base + cycle[0];
+                    c_we      = 1'b1;
+                    c_sel     = phase_cycle_q[1:0];
+                    c_wr_addr = (tile_row_q + phase_cycle_q[1]) * MATRIX_DIM
+                        + tile_col_q + phase_cycle_q[0];
                 end
 
                 FINISH: begin
                     // Single cycle: raise done to announce the tile is finished.
-                    done = 1;
+                    done = 1'b1;
                 end
 
                 default: begin
@@ -194,3 +214,5 @@ module conventional_tile_controller (
     end
 
 endmodule
+
+`default_nettype wire

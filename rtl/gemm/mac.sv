@@ -1,9 +1,13 @@
 `timescale 1ns/1ps
 `default_nettype none
 
+// Signed 8-bit operands; one product accumulates on each enabled rising edge.
+// Reset and clear are synchronous and active-high: rst > clr > enable.
+// rst initializes the block; clr starts a new dot product. The 32-bit sum wraps.
 module mac (
     input  logic clk,
-    input  logic reset,
+    input  logic rst,
+    input  logic clr,
     input  logic enable,
 
     input  logic signed [7:0] a,
@@ -12,22 +16,24 @@ module mac (
     output logic signed [31:0] acc
 );
 
-    logic signed [15:0] product;
-    logic signed [31:0] product_extended;
+    localparam int PRODUCT_WIDTH = 16;
+    localparam int ACC_WIDTH     = 32;
 
-    // 8bit + 8 bit = 9bit
+    logic signed [PRODUCT_WIDTH - 1:0] product;
+    logic signed [ACC_WIDTH - 1:0] product_extended;
 
-    // 16-bit = 8-bit * 8-bit
+    // Preserve the full signed 8-bit by 8-bit product before accumulation.
     assign product = a * b;
-    // DECIMAL 3 * 3 = 9
-    // BINARY 011 * 011;  (- 2^7) * (- 2^7) =
 
-    // Sign extend to 16-bit
-    assign product_extended = {{16{product[15]}}, product};
+    // Sign-extend the 16-bit product to match the 32-bit accumulator.
+    assign product_extended = {{(ACC_WIDTH - PRODUCT_WIDTH){product[PRODUCT_WIDTH - 1]}}, product};
 
+    // Clear works even when disabled; otherwise a disabled MAC holds its sum.
     always_ff @(posedge clk) begin
-        if (reset) begin
-            acc <= 32'sd0;
+        if (rst) begin
+            acc <= '0;
+        end else if (clr) begin
+            acc <= '0;
         end else if (enable) begin
             acc <= acc + product_extended;
         end

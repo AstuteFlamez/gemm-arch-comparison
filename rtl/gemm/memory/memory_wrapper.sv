@@ -1,9 +1,12 @@
 `timescale 1ns/1ps
 `default_nettype none
 
+// All SRAM operations use the rising edge of clk; active-high reset gates access.
+// IDLE host writes populate A/B; busy compute reads A/B and writes C.
+// Addresses index matrix elements. Reset gates access without erasing stored data.
 module memory_wrapper (
     input  logic clk,
-    input  logic reset,
+    input  logic rst,
     input  logic busy,
 
     // Read A/B SRAMs
@@ -31,54 +34,63 @@ module memory_wrapper (
     output logic signed [31:0] c_rd_data
 );
 
+    localparam int MATRIX_DIM   = 8;
+    localparam int MATRIX_WORDS = MATRIX_DIM * MATRIX_DIM;
+    localparam int INPUT_WIDTH  = 8;
+    localparam int RESULT_WIDTH = 32;
+
     logic host_access;    // Host accesses memory while idle
     logic compute_access; // GEMM accesses memory while busy
     logic operand_re;     // A/B read request during computation
 
-    assign host_access    = !reset && !busy;
-    assign compute_access = !reset && busy;
+    // Reset suppresses all memory operations. While busy, the compute engine
+    // owns the ports; host writes are ignored and host C read data holds.
+    assign host_access    = !rst && !busy;
+    assign compute_access = !rst && busy;
     assign operand_re     = compute_access && ab_re;
 
+    // A and B share the same read schedule, with one word per memory per edge.
     sram #(
-        .DATA_WIDTH(8),
-        .DEPTH(64)
-    ) sram_a_instance (
+        .DATA_WIDTH(INPUT_WIDTH),
+        .DEPTH(MATRIX_WORDS)
+    ) u_sram_a (
         .clk(clk),
 
         .re(operand_re),
         .we(host_access && a_we),
 
         .addr(busy ? a_rd_addr : a_wr_addr),
-        .rdata(a_rd_data),
-        .wdata(a_wr_data)
+        .rd_data(a_rd_data),
+        .wr_data(a_wr_data)
     );
 
     sram #(
-        .DATA_WIDTH(8),
-        .DEPTH(64)
-    ) sram_b_instance (
+        .DATA_WIDTH(INPUT_WIDTH),
+        .DEPTH(MATRIX_WORDS)
+    ) u_sram_b (
         .clk(clk),
 
         .re(operand_re),
         .we(host_access && b_we),
 
         .addr(busy ? b_rd_addr : b_wr_addr),
-        .rdata(b_rd_data),
-        .wdata(b_wr_data)
+        .rd_data(b_rd_data),
+        .wr_data(b_wr_data)
     );
 
+    // C accepts compute writes while busy and synchronous host reads while idle.
     sram #(
-        .DATA_WIDTH(32),
-        .DEPTH(64)
-    ) sram_c_instance (
+        .DATA_WIDTH(RESULT_WIDTH),
+        .DEPTH(MATRIX_WORDS)
+    ) u_sram_c (
         .clk(clk),
 
         .re(host_access),
         .we(compute_access && c_we),
 
         .addr(busy ? c_wr_addr : c_rd_addr),
-        .rdata(c_rd_data),
-        .wdata(c_wr_data)
+        .rd_data(c_rd_data),
+        .wr_data(c_wr_data)
     );
 
 endmodule

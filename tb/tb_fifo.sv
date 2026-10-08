@@ -5,7 +5,7 @@ module tb_fifo;
     parameter int DATA_WIDTH = 8;
     parameter int DEPTH = 4;
     logic clk = 0;
-    logic reset = 1;
+    logic rst = 1;
     logic push = 0;
     logic pop = 0;
     logic [DATA_WIDTH-1:0] data_in = 0;
@@ -21,7 +21,7 @@ module tb_fifo;
     integer accepted_pushes = 0;
     integer accepted_pops = 0;
     integer coverage [0:DEPTH][0:3];
-    integer reset_coverage [0:DEPTH][0:3];
+    integer rst_coverage [0:DEPTH][0:3];
     bit initialized = 0;
     logic [31:0] rng;
     integer seed;
@@ -33,7 +33,7 @@ module tb_fifo;
 `else
     fifo dut (
 `endif
-        .clk(clk), .reset(reset), .push(push), .pop(pop),
+        .clk(clk), .rst(rst), .push(push), .pop(pop),
         .data_in(data_in), .data_out(data_out), .full(full), .empty(empty)
     );
     always #5 clk = ~clk;
@@ -42,7 +42,7 @@ module tb_fifo;
         if (data_out !== expected_out || full !== (queued == DEPTH) ||
             empty !== (queued == 0))
             $fatal(1, "%s cycle=%0d time=%0t reset/push/pop=%b%b%b count=%0d: expected out/full/empty=%h/%b/%b, got %h/%b/%b",
-                   label_text, cycles, $time, reset, push, pop, queued,
+                   label_text, cycles, $time, rst, push, pop, queued,
                    expected_out, (queued == DEPTH), (queued == 0),
                    data_out, full, empty);
         checks = checks + 1;
@@ -54,8 +54,8 @@ module tb_fifo;
         integer request_kind;
         if (initialized) check_outputs("before register updates");
         request_kind = {push, pop};
-        if (reset) begin
-            reset_coverage[queued][request_kind] = reset_coverage[queued][request_kind] + 1;
+        if (rst) begin
+            rst_coverage[queued][request_kind] = rst_coverage[queued][request_kind] + 1;
             queued = 0;
             expected_out = 0;
         end else begin
@@ -83,11 +83,11 @@ module tb_fifo;
     endtask
 
     task automatic step(
-        input bit rst, input bit request_push, input bit request_pop,
+        input bit next_rst, input bit request_push, input bit request_pop,
         input logic [DATA_WIDTH-1:0] value
     );
         @(negedge clk);
-        reset = rst;
+        rst = next_rst;
         push = request_push;
         pop = request_pop;
         data_in = value;
@@ -117,7 +117,7 @@ module tb_fifo;
         for (integer n = 0; n <= DEPTH; n = n + 1)
             for (integer op = 0; op < 4; op = op + 1) begin
                 coverage[n][op] = 0;
-                reset_coverage[n][op] = 0;
+                rst_coverage[n][op] = 0;
             end
         if (!$value$plusargs("SEED=%d", seed)) seed = 20260917;
         rng = seed;
@@ -181,11 +181,11 @@ module tb_fifo;
         // synchronous reset. Keep one queued item and a nonzero output value.
         step(0, 1, 0, 'hC3);
         @(negedge clk);
-        reset = 1; push = 1; pop = 1; data_in = 'hEE;
+        rst = 1; push = 1; pop = 1; data_in = 'hEE;
         #1;
         check_outputs("between-edge reset and request pulses");
         #1;
-        reset = 0; push = 0; pop = 0;
+        rst = 0; push = 0; pop = 0;
         @(posedge clk);
         sample_edge();
         step(0, 0, 1, 0);
@@ -198,7 +198,7 @@ module tb_fifo;
         repeat (DEPTH + 1) step(0, 0, 1, 0);
         for (integer n = 0; n <= DEPTH; n = n + 1)
             for (integer op = 0; op < 4; op = op + 1)
-                if (coverage[n][op] == 0 || reset_coverage[n][op] == 0)
+                if (coverage[n][op] == 0 || rst_coverage[n][op] == 0)
                     $fatal(1, "Missing coverage: occupancy=%0d request=%0d", n, op);
         $display("PASS: FIFO depth=%0d width=%0d completed %0d cycles, %0d output checks, %0d accepted pushes and %0d accepted pops; all %0d normal and %0d reset combinations covered",
                  DEPTH, DATA_WIDTH, cycles, checks, accepted_pushes, accepted_pops,

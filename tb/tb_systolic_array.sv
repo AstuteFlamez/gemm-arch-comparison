@@ -3,7 +3,8 @@
 
 module tb_systolic_array;
     logic clk = 0;
-    logic reset = 1;
+    logic rst = 1;
+    logic clr = 0;
     logic enable = 0;
     logic signed [7:0] A0 = 0, A1 = 0, B0 = 0, B1 = 0;
     logic signed [31:0] C00, C01, C10, C11;
@@ -15,7 +16,10 @@ module tb_systolic_array;
     integer random_init;
 
     systolic_array dut (
-        .clk(clk), .reset(reset), .enable(enable),
+        .clk(clk),
+        .rst(rst),
+        .clr(clr),
+        .enable(enable),
         .A0(A0), .A1(A1), .B0(B0), .B1(B1),
         .C00(C00), .C01(C01), .C10(C10), .C11(C11)
     );
@@ -24,15 +28,17 @@ module tb_systolic_array;
 
     // Drive on falling edges; observe after the rising-edge register updates.
     task automatic step(
-        input logic next_reset, next_enable,
+        input logic next_rst, next_enable,
         input logic signed [7:0] next_a0, next_a1, next_b0, next_b1,
         input integer expected00, expected01, expected10, expected11,
-        input string case_name
+        input string case_name,
+        input logic next_clr = 1'b0
     );
         logic [127:0] previous_results;
         @(negedge clk);
         previous_results = {C00, C01, C10, C11};
-        reset = next_reset;
+        rst = next_rst;
+        clr = next_clr;
         enable = next_enable;
         A0 = next_a0;
         A1 = next_a1;
@@ -52,7 +58,7 @@ module tb_systolic_array;
     endtask
 
     // Mathematical reference: product k reaches PE(row,col) on enabled
-    // step k+row+col. Compute partial dot products directly from the matrices,
+    // step k+row+col. COMPUTE partial dot products directly from the matrices,
     // independently of the DUT's forwarding registers.
     function automatic integer expected_sum(
         input integer row, col, terms, last_step
@@ -177,6 +183,21 @@ module tb_systolic_array;
         repeat (3)
             step(0, 1, 0, 0, 0, 0, 0, 0, 0, 0, "no stale data after held reset");
         run_tile(8, 0, "restart after interrupted tile");
+
+        // Clear with operands in flight must flush forwarding as well as sums.
+        step(0, 0, 9, 9, 9, 9, 0, 0, 0, 0, "clear completed tile while disabled", 1);
+        step(0, 1, 2, 0, 3, 0, 6, 0, 0, 0, "start tile before clear");
+        step(0, 0, 9, 9, 9, 9, 0, 0, 0, 0, "clear in-flight tile while disabled", 1);
+        repeat (3) begin
+            step(0, 1, 0, 0, 0, 0, 0, 0, 0, 0, "no stale data after clear");
+        end
+        step(0, 1, 2, 0, 3, 0, 6, 0, 0, 0, "restart after clear");
+        step(0, 1, 9, 9, 9, 9, 0, 0, 0, 0, "clear overrides enable", 1);
+        step(0, 1, 9, 9, 9, 9, 0, 0, 0, 0, "held clear", 1);
+        step(1, 1, 9, 9, 9, 9, 0, 0, 0, 0, "reset and clear together", 1);
+        repeat (3) begin
+            step(0, 1, 0, 0, 0, 0, 0, 0, 0, 0, "no stale data after held clear");
+        end
 
         $display("PASS: systolic array completed %0d tiles and %0d cycle checks",
             tiles, checks);

@@ -4,8 +4,8 @@
 module tb_mac;
 
     logic clk;
-    logic reset;
-    logic clear;
+    logic rst;
+    logic clr;
     logic enable;
     logic signed [7:0] a;
     logic signed [7:0] b;
@@ -13,8 +13,8 @@ module tb_mac;
 
     mac dut (
         .clk(clk),
-        .reset(reset),
-        .clear(clear),
+        .rst(rst),
+        .clr(clr),
         .enable(enable),
         .a(a),
         .b(b),
@@ -33,17 +33,25 @@ module tb_mac;
         input logic signed [7:0] next_a,
         input logic signed [7:0] next_b,
         input logic next_enable,
-        input logic next_clear,
-        input logic next_reset,
+        input logic next_clr,
+        input logic next_rst,
         input logic signed [31:0] expected,
         input string case_name
     );
+        logic signed [31:0] previous_acc;
+
         @(negedge clk);
+        previous_acc = acc;
         a = next_a;
         b = next_b;
         enable = next_enable;
-        clear = next_clear;
-        reset = next_reset;
+        clr = next_clr;
+        rst = next_rst;
+
+        #1;
+        if (acc !== previous_acc) begin
+            $fatal(1, "%s: accumulator changed before rising edge", case_name);
+        end
 
         @(posedge clk);
         #1;
@@ -56,8 +64,8 @@ module tb_mac;
 
 
     initial begin
-        reset = 1'b1;
-        clear = 1'b0;
+        rst = 1'b1;
+        clr = 1'b0;
         enable = 1'b0;
         a = 8'sd0;
         b = 8'sd0;
@@ -65,7 +73,7 @@ module tb_mac;
         @(posedge clk);
 
         @(negedge clk);
-        reset = 1'b0;
+        rst = 1'b0;
         enable = 1'b1;
         a = 8'sd3;
         b = 8'sd4;
@@ -128,7 +136,7 @@ module tb_mac;
         apply_and_check(8'sd2,    8'sd2,    1'b1,   1'b0,  1'b0,  32'sd4,     "normal after held clear");
 
         @(negedge clk);
-        reset = 1'b1;
+        rst = 1'b1;
         enable = 1'b1;
         a = 8'sd9;
         b = 8'sd9;
@@ -148,7 +156,7 @@ module tb_mac;
         apply_and_check(8'sd5,    8'sd5,    1'b1,   1'b0,  1'b0,  32'sd25,    "sum before synchronous clear");
 
         @(negedge clk);
-        clear = 1'b1;
+        clr = 1'b1;
         enable = 1'b1;
         a = 8'sd8;
         b = 8'sd8;
@@ -167,6 +175,9 @@ module tb_mac;
         apply_and_check(8'sd127,  8'sd127,  1'b1,   1'b0,  1'b0,  32'sd16129, "wide sum first product");
         apply_and_check(8'sd127,  8'sd127,  1'b1,   1'b0,  1'b0,  32'sd32258, "wide sum second product");
         apply_and_check(8'sd127,  8'sd127,  1'b1,   1'b0,  1'b0,  32'sd48387, "wide sum exceeds 16 bits");
+
+        apply_and_check(8'sd9, 8'sd9, 1'b1, 1'b1, 1'b1, 32'sd0, "reset and clear together");
+        apply_and_check(8'sd2, 8'sd3, 1'b1, 1'b0, 1'b0, 32'sd6, "resume after reset and clear");
 
         $display("PASS: MAC testbench completed");
         $finish;
