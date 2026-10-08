@@ -5,9 +5,13 @@
 module systolic_array (
     input logic clk, reset, enable,
 
+    // Feed the two rows of A from the left
     input logic signed [7:0] A0, A1,
+
+    // Feed the two columns of B from above
     input logic signed [7:0] B0, B1,
 
+    // Four results for one output tile
     output logic signed [31:0] C00, C01, C10, C11
 );
 
@@ -15,14 +19,16 @@ module systolic_array (
     logic signed [7:0] B0_out, B1_out;
 
     /*
-    00 01
-    10 11
+    PE positions:
+    00  01
+    10  11
     */
 
     pe pe00 (
         .clk(clk),
         .reset(reset),
         .enable(enable),
+
         .a_in(A0),
         .b_in(B0),
         .a_out(A0_out),
@@ -34,9 +40,10 @@ module systolic_array (
         .clk(clk),
         .reset(reset),
         .enable(enable),
+
         .a_in(A0_out),
         .b_in(B1),
-        .a_out(),       // no neighbor to right
+        .a_out(), // No neighbor to the right
         .b_out(B1_out),
         .acc(C01)
     );
@@ -45,10 +52,11 @@ module systolic_array (
         .clk(clk),
         .reset(reset),
         .enable(enable),
+
         .a_in(A1),
         .b_in(B0_out),
         .a_out(A1_out),
-        .b_out(),       // no neighbor below
+        .b_out(), // No neighbor below
         .acc(C10)
     );
 
@@ -56,10 +64,11 @@ module systolic_array (
         .clk(clk),
         .reset(reset),
         .enable(enable),
+
         .a_in(A1_out),
         .b_in(B1_out),
-        .a_out(),       // no neighbor to right
-        .b_out(),       // no neighbor below
+        .a_out(), // No neighbor to the right
+        .b_out(), // No neighbor below
         .acc(C11)
     );
 

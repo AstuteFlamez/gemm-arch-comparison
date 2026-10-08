@@ -34,7 +34,7 @@ module memory_controller (
     } state_t;
     state_t state;
 
-    logic [4:0] cycle;                     // LOAD_FIFO 0–16, COMPUTE_SYSTOLIC_ARRAY 0–10, STORE 0–3
+    logic [4:0] cycle;      // LOAD_FIFO 0–16, COMPUTE_SYSTOLIC_ARRAY 0–10, STORE 0–3
     logic [2:0] row_base, col_base;        
 
     always_ff @(posedge clk) begin
@@ -157,15 +157,12 @@ module memory_controller (
                     the array enabled so C11 can finish using the last values
                     from its neighbors. Then enter STORE cycle 0.
                     */
-                    // Request eight values per pair, with pair 1 one cycle later
                     fifo_pop[0] = (cycle < 8);
                     fifo_pop[1] = (cycle >= 1 && cycle <= 8);
 
-                    // FIFO outputs become usable one cycle after their pop
                     fifo_valid[0] = (cycle >= 1 && cycle <= 8);
                     fifo_valid[1] = (cycle >= 2 && cycle <= 9);
 
-                    // Keep advancing through cycle 10 to finish the bottom-right PE
                     array_enable = (cycle >= 1);
                 end
 
@@ -181,13 +178,11 @@ module memory_controller (
                     */
                     c_we = 1;
                     c_sel = cycle[1:0];
-                    // High bit selects the tile row; low bit selects the column
                     c_wr_addr = (row_base + cycle[1]) * 8 + col_base + cycle[0];
                 end
 
                 FINISH: begin
                     // Single cycle: raise done to announce the tile is finished.
-                    // No reads, pushes, pops, calculations, or writes are requested.
                     done = 1;
                 end
 

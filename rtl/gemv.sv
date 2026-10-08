@@ -3,34 +3,40 @@
 */
 `timescale 1ns/1ps
 `default_nettype none
+
 module gemv (
     input  logic clk,
     input  logic reset,
 
-    input  logic a_we, // A matrix write enable
-    input  logic [5:0] a_addr, // 6-bit address for A matrix (64 elements)
-    input  logic signed [7:0] a_wdata, // 8-bit signed matrix write data
-    
-    input  logic x_we, // x matrix write enable
-    input  logic [2:0] x_addr, // 3-bit address for x vector (8 elements)
-    input  logic signed [7:0] x_wdata, // 8-bit signed vector write data
+    // Write A: 64 signed 8-bit elements
+    input  logic a_we,
+    input  logic [5:0] a_addr,
+    input  logic signed [7:0] a_wdata,
 
-    // calculation control signals
+    // Write x: 8 signed 8-bit elements
+    input  logic x_we,
+    input  logic [2:0] x_addr,
+    input  logic signed [7:0] x_wdata,
+
+    // Start one matrix-vector multiplication
     input  logic start,
     output logic busy,
     output logic done,
 
-    input  logic [2:0] y_rd_addr, // 3-bit address for output y vector (8 elements)
-    output logic signed [31:0] y_rd_data // 32-bit signed output vector read data
+    // Read y: 8 signed 32-bit results
+    input  logic [2:0] y_rd_addr,
+    output logic signed [31:0] y_rd_data
 );
 
-    logic signed [7:0] A [0:63]; // (matrix) 8-bits per 64 elements stored in a 1D array
-    logic signed [7:0] x [0:7]; // (vector) 8-bits per 8 elements stored in a 1D array
-    logic signed [31:0] y [0:7]; // (output vector) 32-bits per 8 elements stored in a 1D array
+    // Operand and result storage
+    logic signed [7:0] A [0:63];
+    logic signed [7:0] x [0:7];
+    logic signed [31:0] y [0:7];
+
     logic [7:0] row;
     logic [7:0] column;
 
-    //  state machine of IDLE=00 -> ROW_CLEAR=01 -> MAC=10 -> STORE=11 -> IDLE=00
+    // Compute one output row at a time
     typedef enum logic [1:0] {
         IDLE,
         ROW_CLEAR,
@@ -39,6 +45,7 @@ module gemv (
     } state_t;
     state_t state;
 
+    // MAC controls, operands, and accumulated result
     logic mac_clear;
     logic mac_enable;
     logic signed [7:0] mac_a;
@@ -50,48 +57,57 @@ module gemv (
         .reset(reset),
         .clear(mac_clear),
         .enable(mac_enable),
+
         .a(mac_a),
         .b(mac_b),
         .acc(mac_acc)
     );
 
-    assign mac_a = A[(row * 8) + column];    // select the matrix element based on the current row and column
-    assign mac_b = x[column];                // select the vector element based on the current column
-    assign mac_clear = (state == ROW_CLEAR); // assert mac_clear only in ROW_CLEAR state
-    assign mac_enable = (state == MAC);      // assert mac_enable only in MAC state
-    assign busy = (state != IDLE);           // assert busy whenever the controller is outside IDLE
-    assign y_rd_data = y[y_rd_addr];         // read the result array element selected by y_rd_addr into y_rd_data
+    // Select one term of the current row's dot product
+    assign mac_a = A[(row * 8) + column];
+    assign mac_b = x[column];
 
+    assign mac_clear  = (state == ROW_CLEAR);
+    assign mac_enable = (state == MAC);
+
+    assign busy = (state != IDLE);
+    assign y_rd_data = y[y_rd_addr];
 
     always_ff @(posedge clk) begin
         if (reset) begin
-            state <= IDLE;
-            row <= 8'd0;
+            state  <= IDLE;
+            row    <= 8'd0;
             column <= 8'd0;
-            done <= 1'b0;
+            done   <= 1'b0;
         end else begin
             case (state)
                 IDLE: begin
-                    if (a_we) begin // write to A array when a_we is high
+                    // Accept writes while idle
+                    if (a_we) begin
                         A[a_addr] <= a_wdata;
                     end
-                    if (x_we) begin // write to x array when x_we is high
+
+                    if (x_we) begin
                         x[x_addr] <= x_wdata;
                     end
-                    if (start && !a_we && !x_we) begin // accept start only when neither write enable is high
-                        row <= 8'd0;
+
+                    // Accept start only when neither write enable is high
+                    if (start && !a_we && !x_we) begin
+                        row    <= 8'd0;
                         column <= 8'd0;
-                        done <= 1'b0;
-                        state <= ROW_CLEAR;
+                        done   <= 1'b0;
+                        state  <= ROW_CLEAR;
                     end
                 end
 
-                ROW_CLEAR: begin // clear the MAC's accumulator at this edge, then advance to MAC for the next edge
+                ROW_CLEAR: begin
+                    // Clear the accumulator at this edge; MAC starts next edge
                     column <= 8'd0;
-                    state <= MAC;
+                    state  <= MAC;
                 end
 
-                MAC: begin // accumulate the operands selected before this rising edge
+                MAC: begin
+                    // Accumulate the operands selected before this rising edge
                     if (column < 8'd7) begin
                         column <= column + 8'd1;
                     end else begin
@@ -99,14 +115,18 @@ module gemv (
                     end
                 end
 
-                STORE: begin // save the MAC's completed accumulator into the current result row
+                STORE: begin
+                    // Save the completed dot product in the current result row
                     y[row] <= mac_acc;
-                    if (row < 8'd7) begin // for rows 0..6, advance the row, reset the column, and enter ROW_CLEAR
-                        row <= row + 8'd1;
+
+                    if (row < 8'd7) begin
+                        // Rows 0-6: advance to the next row and clear the MAC
+                        row    <= row + 8'd1;
                         column <= 8'd0;
-                        state <= ROW_CLEAR;
-                    end else begin // for row 7, assert done and return to IDLE
-                        done <= 1'b1;
+                        state  <= ROW_CLEAR;
+                    end else begin
+                        // Row 7: all results are stored
+                        done  <= 1'b1;
                         state <= IDLE;
                     end
                 end
@@ -117,8 +137,6 @@ module gemv (
             endcase
         end
     end
-
-
 endmodule
 
 `default_nettype wire

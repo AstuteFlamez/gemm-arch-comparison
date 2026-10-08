@@ -2,26 +2,29 @@
 `default_nettype none
 
 module pe (
-    // Control Signals
-    input  logic               clk,
-    input  logic               reset,
-    input  logic               enable,
+    input  logic clk,
+    input  logic reset,
+    input  logic enable,
 
-    input  logic signed [7:0]  a_in,
-    input  logic signed [7:0]  b_in,
-    output logic signed [7:0]  a_out,
-    output logic signed [7:0]  b_out,
+    // Receive operands from the left and above
+    input  logic signed [7:0] a_in,
+    input  logic signed [7:0] b_in,
+
+    // Forward operands to the right and below
+    output logic signed [7:0] a_out,
+    output logic signed [7:0] b_out,
 
     output logic signed [31:0] acc
 );
 
     mac mac_inst (
-        .clk    (clk),
-        .reset  (reset),
-        .enable (enable),
-        .a      (a_in),
-        .b      (b_in),
-        .acc    (acc)
+        .clk(clk),
+        .reset(reset),
+        .enable(enable),
+
+        .a(a_in),
+        .b(b_in),
+        .acc(acc)
     );
 
     always_ff @(posedge clk) begin

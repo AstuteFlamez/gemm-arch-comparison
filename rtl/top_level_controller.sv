@@ -4,7 +4,7 @@
 module top_level_controller (
     input logic clk, reset,
 
-    // Start one full 8×8 GEMM. Starts while busy are ignored
+    // Start one full 8×8 GEMM.
     input  logic start,
     output logic busy,
     output logic done,
@@ -22,25 +22,26 @@ module top_level_controller (
     } state_t;
     state_t state;
 
-    logic [3:0] tile_index; // tiles 0–15: four across, then the next row
+    logic [3:0] tile_index; // tiles 0–15: four across, advance to next row
 
     assign tile_row = {tile_index[3:2], 1'b0};
     assign tile_col = {tile_index[1:0], 1'b0};
+
     assign busy = (state != IDLE);
     assign tile_start = !reset && (state == START_TILE);
 
     always_ff @(posedge clk) begin
         if (reset) begin
-            state <= IDLE;
+            state      <= IDLE;
             tile_index <= 0;
-            done <= 0;
+            done       <= 0;
         end else begin
             case (state)
                 IDLE: begin
                     if (start) begin
                         tile_index <= 0;
-                        done <= 0;
-                        state <= START_TILE;
+                        done       <= 0;
+                        state      <= START_TILE;
                     end
                 end
 
@@ -51,12 +52,12 @@ module top_level_controller (
                 WAIT_TILE: begin
                     if (tile_done) begin
                         if (tile_index == 15) begin
-                            done <= 1;
+                            done  <= 1;
                             state <= IDLE;
                         end else begin
                             // Advance (0,0) -> (0,2) -> ... -> (6,6)
                             tile_index <= tile_index + 1;
-                            state <= START_TILE;
+                            state      <= START_TILE;
                         end
                     end
                 end
