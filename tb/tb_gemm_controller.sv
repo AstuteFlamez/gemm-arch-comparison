@@ -21,8 +21,8 @@ module tb_gemm_controller;
     );
 
     // Use the real tile controller to verify the FINISH/start handoff.
-    // Arithmetic and FIFO data are checked by test-memory-controller.
-    memory_controller tile_controller (
+    // Arithmetic and FIFO data are checked by test-systolic-tile-controller.
+    systolic_tile_controller tile_controller (
         .clk(clk), .reset(reset), .start(tile_start),
         .tile_row(tile_row), .tile_col(tile_col), .done(memory_done),
         .ab_re(ab_re), .a_rd_addr(a_rd_addr), .b_rd_addr(b_rd_addr),
@@ -224,7 +224,7 @@ module tb_gemm_controller;
         $display("PASS: top-level controller completed %0d jobs; 16 ordered tiles and 64 writes per job",
                  completed_jobs);
         $display("PASS: sticky done, busy starts, held-start restart, delayed completion, and 9 reset/restart cases");
-        $display("PASS: 544 clocks per job with the current memory controller");
+        $display("PASS: 544 clocks per job with the current systolic tile controller");
         $finish;
     end
 

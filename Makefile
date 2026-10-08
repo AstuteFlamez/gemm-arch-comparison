@@ -8,7 +8,7 @@ RANDOM_COUNT ?= 100
 BOARD_SEED ?= 20261008
 BOARD_RANDOM_COUNT ?= 100
 BOARD_VECTOR_ARGS = --seed $(BOARD_SEED) --random-count $(BOARD_RANDOM_COUNT) --out-dir fpga/de2_115
-GEMM_RTL = rtl/mac.sv rtl/pe.sv rtl/systolic_array.sv rtl/fifo.sv rtl/sram.sv rtl/memory_wrapper.sv rtl/memory_controller.sv rtl/top_level_controller.sv rtl/gemm.sv
+GEMM_RTL = rtl/gemm/mac.sv rtl/gemm/systolic_array/pe.sv rtl/gemm/systolic_array/systolic_array.sv rtl/gemm/fifo.sv rtl/gemm/memory/sram.sv rtl/gemm/memory/memory_wrapper.sv rtl/gemm/systolic_array/systolic_tile_controller.sv rtl/gemm/top_level_controller.sv rtl/gemm/systolic_array/systolic_gemm.sv
 GEMM_SOURCES = $(GEMM_RTL) tb/tb_gemm.sv
 QUARTUS_SH ?= quartus_sh
 
@@ -17,12 +17,12 @@ QUARTUS_SH ?= quartus_sh
 .PHONY: fifo-compile test-fifo test-fifo-vcs test-fifo-configs
 .PHONY: pe-compile test-pe
 .PHONY: systolic-array-compile test-systolic-array
-.PHONY: memory-controller-compile test-memory-controller
+.PHONY: systolic-tile-controller-compile test-systolic-tile-controller
 .PHONY: de2-115-vectors check-de2-115-vectors test-de2-115 quartus-de2-115
 
 help:
 	@printf '%s\n' \
-	  'Current milestone: test the GEMM core in rtl/gemm.sv' \
+	  'Current milestone: test the GEMM core in rtl/gemm/systolic_array/systolic_gemm.sv' \
 	  '  make env        Find tools in this shell; write build/environment.json' \
 	  '  make smoke      Compile/run the local Icarus environment test' \
 	  '  make smoke-vcs  Compile/run the same test on a configured VCS machine' \
@@ -33,7 +33,7 @@ help:
 	  '  make test-mac-vcs Run MAC checks inside the configured CAE container' \
 	  '  make test-pe     Run PE accumulation, enable, forwarding, and reset checks' \
 	  '  make test-systolic-array Run 2x2 array arithmetic, zero padding, pause, and reset checks' \
-	  '  make test-memory-controller Run tile loading, compute, writeback, reset, and timing checks' \
+	  '  make test-systolic-tile-controller Run tile loading, compute, writeback, reset, and timing checks' \
 	  '  make gemv-compile Compile the GEMV core and testbench without simulating' \
 	  '  make test-gemv    Run the five basic GEMV tests locally' \
 	  '  make test-gemv-vcs Run the basic GEMV tests on CAE' \
@@ -79,50 +79,50 @@ vectors: test-python
 
 mac-compile:
 	@mkdir -p build/mac
-	$(IVERILOG) -g2012 -Wall -s tb_mac -o build/mac/mac.vvp rtl/mac.sv tb/tb_mac.sv > build/mac/compile.log 2>&1 || { cat build/mac/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_mac -o build/mac/mac.vvp rtl/gemm/mac.sv tb/tb_mac.sv > build/mac/compile.log 2>&1 || { cat build/mac/compile.log; exit 1; }
 
 test-mac: mac-compile
 	cd build/mac && $(VVP) -l run.log mac.vvp
 
 test-mac-vcs:
 	@mkdir -p build/mac/vcs
-	cd build/mac/vcs && $(VCS) -full64 -sverilog -top tb_mac ../../../rtl/mac.sv ../../../tb/tb_mac.sv -o simv -l compile.log
+	cd build/mac/vcs && $(VCS) -full64 -sverilog -top tb_mac ../../../rtl/gemm/mac.sv ../../../tb/tb_mac.sv -o simv -l compile.log
 	cd build/mac/vcs && ./simv -l run.log
 
 pe-compile:
 	@mkdir -p build/pe
-	$(IVERILOG) -g2012 -Wall -s tb_pe -o build/pe/pe.vvp rtl/mac.sv rtl/pe.sv tb/tb_pe.sv > build/pe/compile.log 2>&1 || { cat build/pe/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_pe -o build/pe/pe.vvp rtl/gemm/mac.sv rtl/gemm/systolic_array/pe.sv tb/tb_pe.sv > build/pe/compile.log 2>&1 || { cat build/pe/compile.log; exit 1; }
 
 test-pe: pe-compile
 	cd build/pe && $(VVP) -l run.log pe.vvp
 
 systolic-array-compile:
 	@mkdir -p build/systolic-array
-	$(IVERILOG) -g2012 -Wall -s tb_systolic_array -o build/systolic-array/systolic-array.vvp rtl/mac.sv rtl/pe.sv rtl/systolic_array.sv tb/tb_systolic_array.sv > build/systolic-array/compile.log 2>&1 || { cat build/systolic-array/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_systolic_array -o build/systolic-array/systolic-array.vvp rtl/gemm/mac.sv rtl/gemm/systolic_array/pe.sv rtl/gemm/systolic_array/systolic_array.sv tb/tb_systolic_array.sv > build/systolic-array/compile.log 2>&1 || { cat build/systolic-array/compile.log; exit 1; }
 
 test-systolic-array: systolic-array-compile
 	cd build/systolic-array && $(VVP) -l run.log systolic-array.vvp +SEED=$(SEED)
 
 gemv-compile:
 	@mkdir -p build/gemv
-	$(IVERILOG) -g2012 -Wall -s tb_gemv -o build/gemv/gemv.vvp rtl/mac.sv rtl/gemv.sv tb/tb_gemv.sv > build/gemv/compile.log 2>&1 || { cat build/gemv/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_gemv -o build/gemv/gemv.vvp rtl/gemm/mac.sv rtl/gemv/gemv.sv tb/tb_gemv.sv > build/gemv/compile.log 2>&1 || { cat build/gemv/compile.log; exit 1; }
 
 test-gemv: gemv-compile
 	cd build/gemv && $(VVP) -l run.log gemv.vvp
 
 test-gemv-vcs:
 	@mkdir -p build/gemv/vcs
-	cd build/gemv/vcs && $(VCS) -full64 -sverilog -top tb_gemv ../../../rtl/mac.sv ../../../rtl/gemv.sv ../../../tb/tb_gemv.sv -o simv -l compile.log
+	cd build/gemv/vcs && $(VCS) -full64 -sverilog -top tb_gemv ../../../rtl/gemm/mac.sv ../../../rtl/gemv/gemv.sv ../../../tb/tb_gemv.sv -o simv -l compile.log
 	cd build/gemv/vcs && ./simv -l run.log
 
 test-gemv-full: vectors
 	@mkdir -p build/gemv-regression
-	$(IVERILOG) -g2012 -Wall -s tb_gemv_regression -o build/gemv-regression/gemv.vvp rtl/mac.sv rtl/gemv.sv tb/tb_gemv_regression.sv > build/gemv-regression/compile.log 2>&1 || { cat build/gemv-regression/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_gemv_regression -o build/gemv-regression/gemv.vvp rtl/gemm/mac.sv rtl/gemv/gemv.sv tb/tb_gemv_regression.sv > build/gemv-regression/compile.log 2>&1 || { cat build/gemv-regression/compile.log; exit 1; }
 	cd build/gemv-regression && $(VVP) -l run.log gemv.vvp +VECTORS=../vectors/vectors.txt
 
 test-gemv-full-vcs: vectors
 	@mkdir -p build/gemv-regression/vcs
-	cd build/gemv-regression/vcs && $(VCS) -full64 -sverilog -top tb_gemv_regression ../../../rtl/mac.sv ../../../rtl/gemv.sv ../../../tb/tb_gemv_regression.sv -o simv -l compile.log
+	cd build/gemv-regression/vcs && $(VCS) -full64 -sverilog -top tb_gemv_regression ../../../rtl/gemm/mac.sv ../../../rtl/gemv/gemv.sv ../../../tb/tb_gemv_regression.sv -o simv -l compile.log
 	cd build/gemv-regression/vcs && ./simv -l run.log +VECTORS=../../vectors/vectors.txt
 
 gemm-compile:
@@ -154,27 +154,27 @@ quartus-de2-115: check-de2-115-vectors
 
 gemm-controller-compile:
 	@mkdir -p build/gemm-controller
-	$(IVERILOG) -g2012 -Wall -s tb_gemm_controller -o build/gemm-controller/controller.vvp rtl/top_level_controller.sv rtl/memory_controller.sv tb/tb_gemm_controller.sv > build/gemm-controller/compile.log 2>&1 || { cat build/gemm-controller/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_gemm_controller -o build/gemm-controller/controller.vvp rtl/gemm/top_level_controller.sv rtl/gemm/systolic_array/systolic_tile_controller.sv tb/tb_gemm_controller.sv > build/gemm-controller/compile.log 2>&1 || { cat build/gemm-controller/compile.log; exit 1; }
 
 test-gemm-controller: gemm-controller-compile
 	cd build/gemm-controller && $(VVP) -l run.log controller.vvp
 
 test-gemm-controller-vcs:
 	@mkdir -p build/gemm-controller/vcs
-	cd build/gemm-controller/vcs && $(VCS) -full64 -sverilog -top tb_gemm_controller ../../../rtl/top_level_controller.sv ../../../rtl/memory_controller.sv ../../../tb/tb_gemm_controller.sv -o simv -l compile.log
+	cd build/gemm-controller/vcs && $(VCS) -full64 -sverilog -top tb_gemm_controller ../../../rtl/gemm/top_level_controller.sv ../../../rtl/gemm/systolic_array/systolic_tile_controller.sv ../../../tb/tb_gemm_controller.sv -o simv -l compile.log
 	cd build/gemm-controller/vcs && ./simv -l run.log
 
-memory-controller-compile:
-	@mkdir -p build/memory-controller
-	$(IVERILOG) -g2012 -Wall -s tb_memory_controller -o build/memory-controller/controller.vvp rtl/memory_controller.sv rtl/sram.sv rtl/fifo.sv rtl/mac.sv rtl/pe.sv rtl/systolic_array.sv tb/tb_memory_controller.sv > build/memory-controller/compile.log 2>&1 || { cat build/memory-controller/compile.log; exit 1; }
+systolic-tile-controller-compile:
+	@mkdir -p build/systolic-tile-controller
+	$(IVERILOG) -g2012 -Wall -s tb_systolic_tile_controller -o build/systolic-tile-controller/controller.vvp rtl/gemm/systolic_array/systolic_tile_controller.sv rtl/gemm/memory/sram.sv rtl/gemm/fifo.sv rtl/gemm/mac.sv rtl/gemm/systolic_array/pe.sv rtl/gemm/systolic_array/systolic_array.sv tb/tb_systolic_tile_controller.sv > build/systolic-tile-controller/compile.log 2>&1 || { cat build/systolic-tile-controller/compile.log; exit 1; }
 
-test-memory-controller: memory-controller-compile
-	cd build/memory-controller && $(VVP) -l run.log controller.vvp +SEED=$(SEED)
+test-systolic-tile-controller: systolic-tile-controller-compile
+	cd build/systolic-tile-controller && $(VVP) -l run.log controller.vvp +SEED=$(SEED)
 
 sram-compile:
 	@mkdir -p build/sram
-	$(IVERILOG) -g2012 -Wall -s tb_sram -o build/sram/sram.vvp rtl/sram.sv tb/tb_sram.sv > build/sram/compile.log 2>&1 || { cat build/sram/compile.log; exit 1; }
-	$(IVERILOG) -g2012 -Wall -s tb_sram -Ptb_sram.DATA_WIDTH=16 -Ptb_sram.DEPTH=7 -o build/sram/sram-7x16.vvp rtl/sram.sv tb/tb_sram.sv > build/sram/compile-7x16.log 2>&1 || { cat build/sram/compile-7x16.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_sram -o build/sram/sram.vvp rtl/gemm/memory/sram.sv tb/tb_sram.sv > build/sram/compile.log 2>&1 || { cat build/sram/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_sram -Ptb_sram.DATA_WIDTH=16 -Ptb_sram.DEPTH=7 -o build/sram/sram-7x16.vvp rtl/gemm/memory/sram.sv tb/tb_sram.sv > build/sram/compile-7x16.log 2>&1 || { cat build/sram/compile-7x16.log; exit 1; }
 
 test-sram: sram-compile
 	cd build/sram && $(VVP) -l run.log sram.vvp
@@ -182,7 +182,7 @@ test-sram: sram-compile
 
 fifo-compile:
 	@mkdir -p build/fifo
-	$(IVERILOG) -g2012 -Wall -s tb_fifo -o build/fifo/fifo.vvp rtl/fifo.sv tb/tb_fifo.sv > build/fifo/compile.log 2>&1 || { cat build/fifo/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -s tb_fifo -o build/fifo/fifo.vvp rtl/gemm/fifo.sv tb/tb_fifo.sv > build/fifo/compile.log 2>&1 || { cat build/fifo/compile.log; exit 1; }
 
 test-fifo: fifo-compile
 	cd build/fifo && $(VVP) -l run.log fifo.vvp +SEED=$(SEED)
@@ -194,7 +194,7 @@ test-fifo-configs:
 	    mkdir -p "$$out_dir"; \
 	    $(IVERILOG) -g2012 -Wall -DFIFO_PARAMETERIZED -s tb_fifo \
 	      -Ptb_fifo.DEPTH=$$depth -Ptb_fifo.DATA_WIDTH=$$width \
-	      -o "$$out_dir/fifo.vvp" rtl/fifo.sv tb/tb_fifo.sv > "$$out_dir/compile.log" 2>&1 \
+	      -o "$$out_dir/fifo.vvp" rtl/gemm/fifo.sv tb/tb_fifo.sv > "$$out_dir/compile.log" 2>&1 \
 	      || { cat "$$out_dir/compile.log"; exit 1; }; \
 	    (cd "$$out_dir" && $(VVP) -l run.log fifo.vvp +SEED=$(SEED)); \
 	  done; \
@@ -202,7 +202,7 @@ test-fifo-configs:
 
 test-fifo-vcs:
 	@mkdir -p build/fifo/vcs
-	cd build/fifo/vcs && $(VCS) -full64 -sverilog -top tb_fifo ../../../rtl/fifo.sv ../../../tb/tb_fifo.sv -o simv -l compile.log
+	cd build/fifo/vcs && $(VCS) -full64 -sverilog -top tb_fifo ../../../rtl/gemm/fifo.sv ../../../tb/tb_fifo.sv -o simv -l compile.log
 	cd build/fifo/vcs && ./simv -l run.log +SEED=$(SEED)
 
 check: env smoke test-python

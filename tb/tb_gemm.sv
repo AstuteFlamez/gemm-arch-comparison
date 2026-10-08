@@ -28,7 +28,7 @@ module tb_gemm;
     integer checked_outputs = 0;
     integer reset_offsets [0:10];
 
-    gemm dut (
+    systolic_gemm dut (
         .clk(clk), .reset(reset),
         .a_we(a_we), .a_wr_addr(a_wr_addr), .a_wdata(a_wdata),
         .b_we(b_we), .b_wr_addr(b_wr_addr), .b_wdata(b_wdata),

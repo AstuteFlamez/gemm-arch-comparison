@@ -14,6 +14,7 @@ module pe (
     output logic signed [7:0] a_out,
     output logic signed [7:0] b_out,
 
+    // accumulator from MAC
     output logic signed [31:0] acc
 );
 

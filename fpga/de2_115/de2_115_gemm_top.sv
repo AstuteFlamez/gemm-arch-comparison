@@ -88,7 +88,7 @@ module de2_115_gemm_top (
     assign core_start = !reset && (state == START_CORE);
     assign core_reset = reset || (state == RESET_CORE) || (state == FAIL);
 
-    gemm core (
+    systolic_gemm core (
         .clk(CLOCK_50), .reset(core_reset),
         .a_we(load_we), .a_wr_addr(word_index), .a_wdata(a_value),
         .b_we(load_we), .b_wr_addr(word_index), .b_wdata(b_value),

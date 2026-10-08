@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module tb_memory_controller;
+module tb_systolic_tile_controller;
     logic clk = 0, reset = 1, start = 0;
     always #5 clk = ~clk;
     logic [2:0] tile_row = 0, tile_col = 0;
@@ -40,7 +40,7 @@ module tb_memory_controller;
                 $fatal(1, "unexpected control during writeback");
         end
     end
-    memory_controller dut (.*);
+    systolic_tile_controller dut (.*);
     sram #(.DATA_WIDTH(8), .DEPTH(64)) ma(
         .clk(clk), .re(ab_re), .we(host_we),
         .addr(host_we ? host_addr : a_rd_addr), .wdata(aw), .rdata(ar));

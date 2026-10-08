@@ -6,15 +6,15 @@ set_global_assignment -name PROJECT_OUTPUT_DIRECTORY ../../build/quartus/de2_115
 set_global_assignment -name SEARCH_PATH .
 set_global_assignment -name SDC_FILE gemm_de2_115.sdc
 
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/mac.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/pe.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/systolic_array.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/fifo.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/sram.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory_wrapper.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory_controller.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/top_level_controller.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/mac.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/systolic_array/pe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/systolic_array/systolic_array.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/fifo.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/memory/sram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/memory/memory_wrapper.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/systolic_array/systolic_tile_controller.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/top_level_controller.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/systolic_array/systolic_gemm.sv
 set_global_assignment -name SYSTEMVERILOG_FILE de2_115_gemm_top.sv
 
 # Keep unconnected board peripherals undriven. Only the listed pins are used.

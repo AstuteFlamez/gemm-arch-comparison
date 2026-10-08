@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 `default_nettype none
 
-module gemm (
+module systolic_gemm (
     input  logic clk,
     input  logic reset,
 
@@ -60,7 +60,7 @@ module gemm (
     );
 
     // For one tile: load the FIFOs, run the array, then store its four results
-    memory_controller tile_controller_instance (
+    systolic_tile_controller tile_controller_instance (
         .clk(clk),
         .reset(reset),
 

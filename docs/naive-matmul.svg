@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="850" viewBox="0 0 1120 850" role="img" aria-labelledby="title desc">
+  <title id="title">Finalized four-MAC conventional matrix multiplication architecture</title>
+  <desc id="desc">A conventional baseline with the same four MACs, signed INT8 inputs, INT32 accumulators, and single-port A, B, C SRAM interface as the two by two systolic GEMM. A top-level controller sequences sixteen two by two output tiles. For each tile, a new tile controller loads two A rows and two B columns into four eight-word FIFOs using one A and one B memory read per clock. All FIFOs then pop together, with no skew. Direct operand broadcast sends A0 and B0 to MAC0, A0 and B1 to MAC1, A1 and B0 to MAC2, and A1 and B1 to MAC3. Each MAC accumulates eight products, with no operand forwarding between MACs. A four-to-one result selector writes the four results into C SRAM over four clocks. Arrows between blocks can represent multiple data signals. Dashed arrows represent control. This diagram shows the finalized architecture; the conventional RTL is not yet implemented.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#C5050C"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #282728; }
+    .file { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 17px; }
+    .heading { font-size: 20px; font-weight: 700; }
+    .label { font-size: 16px; }
+    .small { font-size: 14px; }
+    .red { fill: #9B0000; }
+    .white { fill: #FFFFFF; }
+    .box { fill: #FFFFFF; stroke: #C5050C; stroke-width: 2; }
+    .tile { fill: #C5050C; stroke: #9B0000; stroke-width: 2; }
+    .flow { fill: none; stroke: #C5050C; stroke-width: 2.5; marker-end: url(#arrow); }
+    .control { stroke-dasharray: 6 5; }
+  </style>
+  <rect width="1120" height="850" fill="#FFFFFF"/>
+  <rect x="20" y="20" width="1080" height="810" rx="14" fill="#FFF5F5" stroke="#C5050C" stroke-width="2"/>
+  <text x="45" y="53" class="heading red">Conventional matmul — 4-MAC baseline</text>
+  <text x="1055" y="53" class="label red" text-anchor="end">Finalized architecture</text>
+
+  <rect x="50" y="85" width="310" height="76" rx="7" class="box"/>
+  <text x="205" y="115" text-anchor="middle" class="file">top_level_controller.sv</text>
+  <text x="205" y="141" text-anchor="middle" class="small">Sequence 16 output tiles · busy / done</text>
+  <rect x="400" y="85" width="310" height="76" rx="7" class="box"/>
+  <text x="555" y="115" text-anchor="middle" class="heading red">Matmul tile controller</text>
+  <text x="555" y="141" text-anchor="middle" class="small">New RTL: load · clear · compute · store</text>
+  <rect x="750" y="70" width="320" height="115" rx="7" class="box"/>
+  <text x="910" y="98" text-anchor="middle" class="file">memory_wrapper.sv</text>
+  <rect x="770" y="112" width="280" height="52" rx="5" fill="#FFF5F5" stroke="#C5050C"/>
+  <text x="910" y="134" text-anchor="middle" class="file">sram.sv × 3 — A, B, C</text>
+  <text x="910" y="155" text-anchor="middle" class="small">A/B: 64 × 8-bit · C: 64 × 32-bit</text>
+  <path d="M 360 123 H 400" class="flow control" marker-start="url(#arrow)"/>
+  <path d="M 710 123 H 750" class="flow control"/>
+
+  <path d="M 440 161 V 200 H 205 V 323 H 240" class="flow control"/>
+  <text x="65" y="290" class="small red">Load / pop control</text>
+  <path d="M 930 185 V 230" class="flow"/>
+  <text x="705" y="218" class="small red">A/B operand reads</text>
+
+  <rect x="240" y="230" width="830" height="130" rx="9" class="box"/>
+  <text x="655" y="257" text-anchor="middle" class="heading red">Tile input FIFOs — fifo.sv × 4</text>
+  <text x="655" y="280" text-anchor="middle" class="small">8 signed bytes each · preload with 1 A word + 1 B word per SRAM read clock</text>
+  <rect x="260" y="295" width="180" height="48" rx="5" fill="#FFF5F5" stroke="#C5050C"/>
+  <text x="350" y="315" text-anchor="middle" class="label">A row r</text>
+  <text x="350" y="334" text-anchor="middle" class="small">A0[k] = A[r, k]</text>
+  <rect x="465" y="295" width="180" height="48" rx="5" fill="#FFF5F5" stroke="#C5050C"/>
+  <text x="555" y="315" text-anchor="middle" class="label">A row r+1</text>
+  <text x="555" y="334" text-anchor="middle" class="small">A1[k] = A[r+1, k]</text>
+  <rect x="670" y="295" width="180" height="48" rx="5" fill="#FFF5F5" stroke="#C5050C"/>
+  <text x="760" y="315" text-anchor="middle" class="label">B column c</text>
+  <text x="760" y="334" text-anchor="middle" class="small">B0[k] = B[k, c]</text>
+  <rect x="875" y="295" width="180" height="48" rx="5" fill="#FFF5F5" stroke="#C5050C"/>
+  <text x="965" y="315" text-anchor="middle" class="label">B column c+1</text>
+  <text x="965" y="334" text-anchor="middle" class="small">B1[k] = B[k, c+1]</text>
+
+  <text x="55" y="383" class="label red">Each 2×2 tile</text>
+  <text x="55" y="410" class="small">1. Load 32 operands</text>
+  <text x="55" y="434" class="small">2. Clear four sums</text>
+  <text x="55" y="458" class="small">3. 8 parallel MAC steps</text>
+  <text x="55" y="482" class="small">4. Store four outputs</text>
+
+  <path d="M 350 343 V 385" class="flow"/>
+  <path d="M 555 343 V 385" class="flow"/>
+  <path d="M 760 343 V 385" class="flow"/>
+  <path d="M 965 343 V 385" class="flow"/>
+  <rect x="240" y="385" width="830" height="72" rx="7" class="box"/>
+  <text x="655" y="413" text-anchor="middle" class="heading red">Direct operand broadcast — wiring</text>
+  <text x="655" y="439" text-anchor="middle" class="small">Pop all FIFOs together: same k, no skew · each A and B value feeds two MACs</text>
+
+  <path d="M 290 457 V 500 H 170 V 530" class="flow"/>
+  <path d="M 530 457 V 500 H 430 V 530" class="flow"/>
+  <path d="M 750 457 V 500 H 690 V 530" class="flow"/>
+  <path d="M 970 457 V 500 H 950 V 530" class="flow"/>
+
+  <rect x="55" y="530" width="230" height="125" rx="8" class="tile"/>
+  <text x="170" y="558" text-anchor="middle" class="file white">MAC 0 · mac.sv</text>
+  <text x="170" y="585" text-anchor="middle" class="heading white">C[r, c]</text>
+  <text x="170" y="610" text-anchor="middle" class="small white">acc += A0[k] × B0[k]</text>
+  <text x="170" y="637" text-anchor="middle" class="small white">32-bit accumulator</text>
+  <rect x="315" y="530" width="230" height="125" rx="8" class="tile"/>
+  <text x="430" y="558" text-anchor="middle" class="file white">MAC 1 · mac.sv</text>
+  <text x="430" y="585" text-anchor="middle" class="heading white">C[r, c+1]</text>
+  <text x="430" y="610" text-anchor="middle" class="small white">acc += A0[k] × B1[k]</text>
+  <text x="430" y="637" text-anchor="middle" class="small white">32-bit accumulator</text>
+  <rect x="575" y="530" width="230" height="125" rx="8" class="tile"/>
+  <text x="690" y="558" text-anchor="middle" class="file white">MAC 2 · mac.sv</text>
+  <text x="690" y="585" text-anchor="middle" class="heading white">C[r+1, c]</text>
+  <text x="690" y="610" text-anchor="middle" class="small white">acc += A1[k] × B0[k]</text>
+  <text x="690" y="637" text-anchor="middle" class="small white">32-bit accumulator</text>
+  <rect x="835" y="530" width="230" height="125" rx="8" class="tile"/>
+  <text x="950" y="558" text-anchor="middle" class="file white">MAC 3 · mac.sv</text>
+  <text x="950" y="585" text-anchor="middle" class="heading white">C[r+1, c+1]</text>
+  <text x="950" y="610" text-anchor="middle" class="small white">acc += A1[k] × B1[k]</text>
+  <text x="950" y="637" text-anchor="middle" class="small white">32-bit accumulator</text>
+
+  <path d="M 170 655 V 680 H 405 V 705" class="flow"/>
+  <path d="M 430 655 V 675 H 510 V 705" class="flow"/>
+  <path d="M 690 655 V 675 H 620 V 705" class="flow"/>
+  <path d="M 950 655 V 680 H 725 V 705" class="flow"/>
+  <rect x="350" y="705" width="430" height="55" rx="7" class="box"/>
+  <text x="565" y="729" text-anchor="middle" class="file">Result select (4 → 1)</text>
+  <text x="565" y="750" text-anchor="middle" class="small">Write four C words in four clocks</text>
+  <path d="M 780 733 H 1090 V 205 H 1040 V 185" class="flow"/>
+  <text x="885" y="723" class="small red">C SRAM writeback</text>
+
+  <text x="55" y="790" class="label">Direct fanout replaces PE-to-PE forwarding. Buffers preserve the existing SRAM bandwidth.</text>
+  <text x="55" y="813" class="small">r,c ∈ {0,2,4,6} · k = 0…7 · Solid: data, dashed: control · MAC enables, host ports and handshakes omitted</text>
+</svg>

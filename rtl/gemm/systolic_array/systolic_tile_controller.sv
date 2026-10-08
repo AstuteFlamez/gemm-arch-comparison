@@ -1,4 +1,4 @@
-module memory_controller (
+module systolic_tile_controller (
     input logic clk, reset,
 
     // Request one 2×2 output tile

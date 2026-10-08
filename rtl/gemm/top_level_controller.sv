@@ -9,7 +9,7 @@ module top_level_controller (
     output logic busy,
     output logic done,
 
-    // Request one tile from memory_controller and wait for its completion
+    // Request one tile from systolic_tile_controller and wait for its completion
     input  logic tile_done,
     output logic tile_start,
     output logic [2:0] tile_row, tile_col
