@@ -7,7 +7,7 @@
 
 */
 
-// Board wrapper for the personal GEMM project. KEY0 resets; KEY1 runs one test.
+// KEY0 resets; KEY1 runs the complete directed + seeded-random matrix suite.
 module de2_115_gemm_top (
     input  logic CLOCK_50,
     input  logic [1:0] KEY,
@@ -16,6 +16,10 @@ module de2_115_gemm_top (
     output logic LED_PASS,
     output logic LED_FAIL
 );
+    `include "gemm_vectors.svh"
+    localparam integer CASE_WIDTH = (CASE_COUNT > 1) ? $clog2(CASE_COUNT) : 1;
+    localparam integer VECTOR_WORDS = CASE_COUNT * 64;
+
     // Quartus implements this initial value at configuration time. KEY0 can
     // also assert reset immediately; release passes through two clock edges.
     (* preserve *) logic [1:0] reset_pipe = 2'b11;
@@ -46,22 +50,40 @@ module de2_115_gemm_top (
     assign start_pressed = start_previous && !start_sync;
 
     typedef enum logic [3:0] {
-        IDLE, RESET_CORE, LOAD, START_CORE, WAIT_CORE,
+        IDLE, RESET_CORE, READ_INPUT, LOAD, START_CORE, WAIT_CORE,
         READ_C, CHECK_C, PASS, FAIL
     } state_t;
     state_t state;
+    logic [CASE_WIDTH-1:0] case_index;
     logic [5:0] word_index;
+    logic [CASE_WIDTH+5:0] vector_address;
     logic [11:0] wait_cycles;
     logic core_reset, core_start, core_busy, core_done, load_we;
     logic signed [7:0] a_value, b_value;
-    logic signed [31:0] c_value;
+    logic signed [31:0] c_value, expected_value;
 
-    // Row-major inputs: A contains -32..31 and B contains 31..-32.
-    // The expected file contains 64 independently calculated signed C words.
-    logic signed [31:0] expected [0:63];
-    initial $readmemh("expected.hex", expected);
-    assign a_value = $signed({2'b00, word_index}) - 8'sd32;
-    assign b_value = 8'sd31 - $signed({2'b00, word_index});
+    // Case-major ROMs: 64 row-major words per matrix. Python supplies the
+    // operands and independent answers; the FPGA performs every multiplication.
+    logic signed [7:0] inputs_a [0:VECTOR_WORDS-1];
+    logic signed [7:0] inputs_b [0:VECTOR_WORDS-1];
+    logic signed [31:0] expected [0:VECTOR_WORDS-1];
+    initial begin
+        $readmemh("inputs_a.hex", inputs_a);
+        $readmemh("inputs_b.hex", inputs_b);
+        $readmemh("expected.hex", expected);
+    end
+    assign vector_address = {case_index, word_index};
+
+    // Registered ROM reads allow Quartus to infer embedded memory. Keep these
+    // registers reset-free; the FSM always requests data before consuming it.
+    always_ff @(posedge CLOCK_50) begin
+        if (state == READ_INPUT) begin
+            a_value <= inputs_a[vector_address];
+            b_value <= inputs_b[vector_address];
+        end
+        if (state == READ_C)
+            expected_value <= expected[vector_address];
+    end
     assign load_we = !reset && (state == LOAD);
     assign core_start = !reset && (state == START_CORE);
     assign core_reset = reset || (state == RESET_CORE) || (state == FAIL);
@@ -82,6 +104,7 @@ module de2_115_gemm_top (
     always_ff @(posedge CLOCK_50) begin
         if (reset) begin
             state <= IDLE;
+            case_index <= 0;
             word_index <= 0;
             wait_cycles <= 0;
         end else begin
@@ -93,23 +116,31 @@ module de2_115_gemm_top (
                 end
 
                 RESET_CORE: begin
-                    // One edge resets the GEMM controllers, FIFOs, and array.
+                    // Reset once per suite. Consecutive pairs reuse the core
+                    // without resetting it, exercising its normal restart path.
+                    case_index <= 0;
                     word_index <= 0;
                     wait_cycles <= 0;
-                    state <= LOAD;
+                    state <= READ_INPUT;
                 end
 
+                READ_INPUT: state <= LOAD;
+
                 LOAD: begin
-                    // Cycles 0-63: write one A word and one B word per edge.
+                    // Consume the preceding ROM read: one A and B word together.
+                    // Reading then writing takes two clocks per address.
                     if (word_index == 63) begin
                         word_index <= 0;
                         state <= START_CORE;
-                    end else
+                    end else begin
                         word_index <= word_index + 1;
+                        state <= READ_INPUT;
+                    end
                 end
 
                 START_CORE: begin
                     // One edge accepts start. The GEMM now owns its memories.
+                    wait_cycles <= 0;
                     state <= WAIT_CORE;
                 end
 
@@ -125,16 +156,23 @@ module de2_115_gemm_top (
                 end
 
                 READ_C: begin
-                    // This edge requests C[word_index]; SRAM updates afterward.
+                    // Request both C and its expected value; both update after
+                    // this edge and are available for the next comparison.
                     state <= CHECK_C;
                 end
 
                 CHECK_C: begin
                     // This edge sees the result of the preceding read edge.
-                    if (c_value == expected[word_index]) begin
-                        if (word_index == 63)
-                            state <= PASS;
-                        else begin
+                    if (c_value == expected_value) begin
+                        if (word_index == 63) begin
+                            if (case_index == CASE_COUNT - 1)
+                                state <= PASS;
+                            else begin
+                                case_index <= case_index + 1;
+                                word_index <= 0;
+                                state <= READ_INPUT;
+                            end
+                        end else begin
                             word_index <= word_index + 1;
                             state <= READ_C;
                         end

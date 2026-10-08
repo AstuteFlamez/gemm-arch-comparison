@@ -5,6 +5,9 @@ VVP ?= vvp
 VCS ?= vcs
 SEED ?= 20260917
 RANDOM_COUNT ?= 100
+BOARD_SEED ?= 20261008
+BOARD_RANDOM_COUNT ?= 100
+BOARD_VECTOR_ARGS = --seed $(BOARD_SEED) --random-count $(BOARD_RANDOM_COUNT) --out-dir fpga/de2_115
 GEMM_RTL = rtl/mac.sv rtl/pe.sv rtl/systolic_array.sv rtl/fifo.sv rtl/sram.sv rtl/memory_wrapper.sv rtl/memory_controller.sv rtl/top_level_controller.sv rtl/gemm.sv
 GEMM_SOURCES = $(GEMM_RTL) tb/tb_gemm.sv
 QUARTUS_SH ?= quartus_sh
@@ -15,7 +18,7 @@ QUARTUS_SH ?= quartus_sh
 .PHONY: pe-compile test-pe
 .PHONY: systolic-array-compile test-systolic-array
 .PHONY: memory-controller-compile test-memory-controller
-.PHONY: test-de2-115 quartus-de2-115
+.PHONY: de2-115-vectors check-de2-115-vectors test-de2-115 quartus-de2-115
 
 help:
 	@printf '%s\n' \
@@ -40,6 +43,8 @@ help:
 	  '  make test-gemm    Run GEMM arithmetic and control checks locally' \
 	  '  make test-gemm-vcs Run GEMM checks on a configured VCS machine' \
 	  '  make test-de2-115 Simulate the board buttons, GEMM self-test, and LEDs' \
+	  '  make de2-115-vectors Regenerate board ROMs (10 directed + BOARD_RANDOM_COUNT pairs)' \
+	  '  make check-de2-115-vectors Verify checked-in ROMs match BOARD_SEED and BOARD_RANDOM_COUNT' \
 	  '  make quartus-de2-115 Compile the FPGA project where Quartus is installed' \
 	  '  make gemm-controller-compile Compile standalone GEMM controller checks' \
 	  '  make test-gemm-controller Run top-level tile sequencing and completion checks' \
@@ -132,13 +137,19 @@ test-gemm-vcs:
 	cd build/gemm/vcs && $(VCS) -full64 -sverilog -top tb_gemm $(addprefix ../../../,$(GEMM_SOURCES)) -o simv -l compile.log
 	cd build/gemm/vcs && ./simv -l run.log
 
-test-de2-115:
+de2-115-vectors:
+	$(PYTHON) tests/gen_gemm_vectors.py $(BOARD_VECTOR_ARGS)
+
+check-de2-115-vectors:
+	$(PYTHON) tests/gen_gemm_vectors.py $(BOARD_VECTOR_ARGS) --check
+
+test-de2-115: check-de2-115-vectors
 	@mkdir -p build/de2-115
-	cp fpga/de2_115/expected.hex build/de2-115/expected.hex
-	$(IVERILOG) -g2012 -Wall -s tb_de2_115_gemm -o build/de2-115/board.vvp $(GEMM_RTL) fpga/de2_115/de2_115_gemm_top.sv tb/tb_de2_115_gemm.sv > build/de2-115/compile.log 2>&1 || { cat build/de2-115/compile.log; exit 1; }
+	cp fpga/de2_115/inputs_a.hex fpga/de2_115/inputs_b.hex fpga/de2_115/expected.hex build/de2-115/
+	$(IVERILOG) -g2012 -Wall -I fpga/de2_115 -s tb_de2_115_gemm -o build/de2-115/board.vvp $(GEMM_RTL) fpga/de2_115/de2_115_gemm_top.sv tb/tb_de2_115_gemm.sv > build/de2-115/compile.log 2>&1 || { cat build/de2-115/compile.log; exit 1; }
 	cd build/de2-115 && $(VVP) -l run.log board.vvp
 
-quartus-de2-115:
+quartus-de2-115: check-de2-115-vectors
 	cd fpga/de2_115 && $(QUARTUS_SH) --flow compile gemm_de2_115
 
 gemm-controller-compile:
