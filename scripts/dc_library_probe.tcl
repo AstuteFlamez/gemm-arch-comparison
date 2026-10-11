@@ -25,7 +25,7 @@ set library_name [get_object_name $candidate_library]
 set cell_count [sizeof_collection [get_lib_cells -quiet ${library_name}/*]]
 if {$cell_count == 0} {
     puts stderr "FAIL library_probe: candidate contains no cells"
-    exit 1okay 
+    exit 1
 }
 
 puts "LOADED library_probe: $library_name contains $cell_count cells"

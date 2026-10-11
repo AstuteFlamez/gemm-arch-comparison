@@ -1,42 +1,9 @@
-# Terasic DE2-115, Cyclone IV E. Paths are relative to this project directory.
-set_global_assignment -name FAMILY "Cyclone IV E"
-set_global_assignment -name DEVICE EP4CE115F29C7
-set_global_assignment -name TOP_LEVEL_ENTITY de2_115_gemm_top
+# Systolic revision; retain the original revision name and bitstream location.
+source [file join [file dirname [info script]] gemm_de2_115_common.qsf]
+set_parameter -name UseConventional 0
 set_global_assignment -name PROJECT_OUTPUT_DIRECTORY ../../build/quartus/de2_115
-set_global_assignment -name SEARCH_PATH .
-set_global_assignment -name SDC_FILE gemm_de2_115.sdc
 
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/mac.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/systolic_array/pe.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/systolic_array/systolic_array.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/fifo.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/memory/sram.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/memory/memory_wrapper.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/systolic_array/systolic_tile_controller.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/top_level_controller.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/gemm/systolic_array/systolic_gemm.sv
-set_global_assignment -name SYSTEMVERILOG_FILE de2_115_gemm_top.sv
-
-# Keep unconnected board peripherals undriven. Only the listed pins are used.
-set_global_assignment -name RESERVE_ALL_UNUSED_PINS "AS INPUT TRI-STATED"
-set_instance_assignment -name SYNCHRONIZER_IDENTIFICATION FORCED -to start_meta_q
-set_instance_assignment -name SYNCHRONIZER_IDENTIFICATION FORCED -to start_sync_q
-set_instance_assignment -name SYNCHRONIZER_IDENTIFICATION FORCED -to {rst_pipe_q[*]}
-
-# Terasic manual tables 4-2, 4-3, and 4-5. KEY voltage assumes JP7 at 2.5 V.
-# https://www.terasic.com.tw/attachment/archive/502/DE2_115_User_manual.pdf
-set_location_assignment PIN_Y2 -to clk
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to clk
-set_location_assignment PIN_M23 -to {KEY[0]}
-set_location_assignment PIN_M21 -to {KEY[1]}
-set_instance_assignment -name IO_STANDARD "2.5 V" -to {KEY[0]}
-set_instance_assignment -name IO_STANDARD "2.5 V" -to {KEY[1]}
-
-set_location_assignment PIN_E21 -to LED_PASS
-set_location_assignment PIN_G19 -to LED_FAIL
-set_location_assignment PIN_E22 -to LED_BUSY
-set_location_assignment PIN_E25 -to LED_READY
-set_instance_assignment -name IO_STANDARD "2.5 V" -to LED_PASS
-set_instance_assignment -name IO_STANDARD "2.5 V" -to LED_FAIL
-set_instance_assignment -name IO_STANDARD "2.5 V" -to LED_BUSY
-set_instance_assignment -name IO_STANDARD "2.5 V" -to LED_READY
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/systolic_array/pe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/systolic_array/systolic_array.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/systolic_array/systolic_tile_controller.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/systolic_array/systolic_gemm.sv

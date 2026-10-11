@@ -10,7 +10,10 @@
 // reset release and KEY1 input cross through two-stage synchronizers.
 // Each KEY1 press while ready runs the ROM suite; presses while busy are ignored.
 // Reset cancels the suite. A mismatch or timeout latches FAIL until reset or restart.
-module de2_115_gemm_top (
+module de2_115_gemm_top #(
+    // Elaborate exactly one core; both use the same board test and host interface.
+    parameter bit UseConventional = 1'b0
+) (
     input  logic clk,
     input  logic [1:0] KEY,
     output logic LED_READY,
@@ -124,25 +127,49 @@ module de2_115_gemm_top (
     assign core_start = !rst && (state_q == START_CORE);
     assign core_rst   = rst || (state_q == RESET_CORE) || (state_q == FAIL);
 
-    systolic_gemm u_gemm (
-        .clk(clk),
-        .rst(core_rst),
+    generate
+        if (UseConventional) begin : gen_conventional
+            conventional_gemm u_gemm (
+                .clk(clk),
+                .rst(core_rst),
 
-        .a_we(load_we),
-        .a_wr_addr(word_index_q),
-        .a_wdata(a_value_q),
+                .a_we(load_we),
+                .a_wr_addr(word_index_q),
+                .a_wdata(a_value_q),
 
-        .b_we(load_we),
-        .b_wr_addr(word_index_q),
-        .b_wdata(b_value_q),
+                .b_we(load_we),
+                .b_wr_addr(word_index_q),
+                .b_wdata(b_value_q),
 
-        .start(core_start),
-        .busy(core_busy),
-        .done(core_done),
+                .start(core_start),
+                .busy(core_busy),
+                .done(core_done),
 
-        .c_rd_addr(word_index_q),
-        .c_rd_data(c_value)
-    );
+                .c_rd_addr(word_index_q),
+                .c_rd_data(c_value)
+            );
+        end else begin : gen_systolic
+            systolic_gemm u_gemm (
+                .clk(clk),
+                .rst(core_rst),
+
+                .a_we(load_we),
+                .a_wr_addr(word_index_q),
+                .a_wdata(a_value_q),
+
+                .b_we(load_we),
+                .b_wr_addr(word_index_q),
+                .b_wdata(b_value_q),
+
+                .start(core_start),
+                .busy(core_busy),
+                .done(core_done),
+
+                .c_rd_addr(word_index_q),
+                .c_rd_data(c_value)
+            );
+        end
+    endgenerate
 
     // PASS/FAIL remain visible until a new suite starts or reset is asserted.
     assign LED_READY = !rst && (state_q == IDLE || state_q == PASS || state_q == FAIL);
@@ -197,7 +224,8 @@ module de2_115_gemm_top (
                 end
 
                 WAIT_CORE: begin
-                    // Normally 544 GEMM work clocks, then observe done.
+                    // Normally 544 systolic or 512 conventional work clocks,
+                    // then observe done. The timeout is the same for both cores.
                     // A stalled core gets a red FAIL instead of waiting forever.
                     if (core_done && !core_busy) begin
                         state_q <= READ_C;

@@ -1,5 +1,8 @@
 {
-  "format": "gemm-board-vectors-v1",
+  "format": "gemm-vectors-v2",
+  "matrix_dim": 8,
+  "input_bits": 8,
+  "result_bits": 32,
   "seed": 20261008,
   "random_count": 100,
   "directed_count": 10,

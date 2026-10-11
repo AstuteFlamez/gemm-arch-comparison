@@ -1,23 +1,26 @@
 `timescale 1ns/1ps
 `default_nettype none
 
-// Fixed 8x8 signed INT8-to-INT32 GEMM, one matrix pair at a time on clk.
+// MatrixDim x MatrixDim signed INT8-to-INT32 GEMM, one matrix pair at a time on clk.
+// Supported compile-time dimensions: 8, 16, and 32; the compute array stays 2x2.
 // Synchronous active-high reset aborts work without erasing A/B/C SRAM contents.
 // An aborted job can leave partially updated C data; restart before using its result.
 // IDLE A/B writes may share the accepted start edge; busy writes/starts are ignored.
 // Done is sticky. IDLE C reads update after the rising edge; addresses index elements.
-module conventional_gemm (
+module systolic_gemm #(
+    parameter int MatrixDim = 8
+) (
     input  logic clk,
     input  logic rst,
 
-    // Write A: 64 signed 8-bit elements
+    // Write A: MatrixDim * MatrixDim signed 8-bit elements
     input  logic a_we,
-    input  logic [5:0] a_wr_addr,
+    input  logic [$clog2(MatrixDim * MatrixDim) - 1:0] a_wr_addr,
     input  logic signed [7:0] a_wdata,
 
-    // Write B: 64 signed 8-bit elements
+    // Write B: MatrixDim * MatrixDim signed 8-bit elements
     input  logic b_we,
-    input  logic [5:0] b_wr_addr,
+    input  logic [$clog2(MatrixDim * MatrixDim) - 1:0] b_wr_addr,
     input  logic signed [7:0] b_wdata,
 
     // Start one full matrix multiplication
@@ -25,14 +28,16 @@ module conventional_gemm (
     output logic busy,
     output logic done,
 
-    // Read C: 64 signed 32-bit results
-    input  logic [5:0] c_rd_addr,
+    // Read C: MatrixDim * MatrixDim signed 32-bit results
+    input  logic [$clog2(MatrixDim * MatrixDim) - 1:0] c_rd_addr,
     output logic signed [31:0] c_rd_data
 );
 
     localparam int INPUT_WIDTH  = 8;
     localparam int RESULT_WIDTH = 32;
-    localparam int FIFO_DEPTH   = 8;
+    localparam int FIFO_DEPTH   = MatrixDim;
+    localparam int ADDR_WIDTH   = $clog2(MatrixDim * MatrixDim);
+    localparam int COORD_WIDTH  = $clog2(MatrixDim);
 
     // Tile-result selector encodings match the tile controller's output order.
     localparam logic [1:0] C00_SELECT = 2'd0;
@@ -43,15 +48,15 @@ module conventional_gemm (
     // Tile request and completion
     logic tile_start;
     logic tile_done;
-    logic [2:0] tile_row;
-    logic [2:0] tile_col;
+    logic [COORD_WIDTH - 1:0] tile_row;
+    logic [COORD_WIDTH - 1:0] tile_col;
 
     // SRAM controls, addresses, and data
     logic ab_re;
     logic c_we;
-    logic [5:0] a_rd_addr;
-    logic [5:0] b_rd_addr;
-    logic [5:0] c_wr_addr;
+    logic [ADDR_WIDTH - 1:0] a_rd_addr;
+    logic [ADDR_WIDTH - 1:0] b_rd_addr;
+    logic [ADDR_WIDTH - 1:0] c_wr_addr;
     logic signed [INPUT_WIDTH - 1:0] a_rd_data;
     logic signed [INPUT_WIDTH - 1:0] b_rd_data;
     logic signed [RESULT_WIDTH - 1:0] c_wr_data;
@@ -59,22 +64,25 @@ module conventional_gemm (
     // FIFO controls, result selection, and buffered operands
     logic [1:0] fifo_push;
     logic [1:0] fifo_pop;
+    logic [1:0] fifo_valid;
     logic [1:0] c_sel;
     logic signed [INPUT_WIDTH - 1:0] a0_fifo_data;
     logic signed [INPUT_WIDTH - 1:0] a1_fifo_data;
     logic signed [INPUT_WIDTH - 1:0] b0_fifo_data;
     logic signed [INPUT_WIDTH - 1:0] b1_fifo_data;
 
-    // Four parallel MACs and their accumulated results
-    logic mac_clr;
-    logic mac_enable;
+    // Array controls and accumulated results
+    logic array_clr;
+    logic array_enable;
     logic signed [RESULT_WIDTH - 1:0] c00_acc;
     logic signed [RESULT_WIDTH - 1:0] c01_acc;
     logic signed [RESULT_WIDTH - 1:0] c10_acc;
     logic signed [RESULT_WIDTH - 1:0] c11_acc;
 
-    // Choose each of the 16 output tiles and announce when the full job is done
-    top_level_controller u_controller (
+    // Choose each 2x2 output tile and announce when the full job is done
+    top_level_controller #(
+        .MatrixDim(MatrixDim)
+    ) u_controller (
         .clk(clk),
         .rst(rst),
 
@@ -88,8 +96,10 @@ module conventional_gemm (
         .tile_col(tile_col)
     );
 
-    // For one tile: load the FIFOs, run four MACs, then store its four results
-    conventional_tile_controller u_tile_controller (
+    // For one tile: load the FIFOs, run the array, then store its four results
+    systolic_tile_controller #(
+        .MatrixDim(MatrixDim)
+    ) u_tile_controller (
         .clk(clk),
         .rst(rst),
 
@@ -104,9 +114,10 @@ module conventional_gemm (
 
         .fifo_push(fifo_push),
         .fifo_pop(fifo_pop),
+        .fifo_valid(fifo_valid),
 
-        .mac_clr(mac_clr),
-        .mac_enable(mac_enable),
+        .array_clr(array_clr),
+        .array_enable(array_enable),
 
         .c_we(c_we),
         .c_wr_addr(c_wr_addr),
@@ -114,7 +125,9 @@ module conventional_gemm (
     );
 
     // The host accesses SRAM while idle; the tile controller accesses it while busy
-    memory_wrapper u_memory (
+    memory_wrapper #(
+        .MatrixDim(MatrixDim)
+    ) u_memory (
         .clk(clk),
         .rst(rst),
         .busy(busy),
@@ -139,7 +152,7 @@ module conventional_gemm (
         .c_rd_data(c_rd_data)
     );
 
-    // Each FIFO holds eight values. Bit 0 controls A0/B0; bit 1 controls A1/B1
+    // Each FIFO holds MatrixDim values. Bit 0 controls A0/B0; bit 1 controls A1/B1
     // The fixed schedule fills and drains them completely for every tile
     fifo #(
         .DATA_WIDTH(INPUT_WIDTH),
@@ -205,54 +218,27 @@ module conventional_gemm (
         .empty()
     );
 
-    // Direct fanout: every FIFO output feeds two MACs. All four consume
-    // the same k together, accumulating one output element each.
-    // Clear at the beginning of every tile; enable only for its eight terms.
-    mac u_mac00 (
+    // FIFO outputs hold their last popped value. Feed zero outside each pair's
+    // valid window so old values are not multiplied again as the array drains.
+    // Clear the array at the beginning of each tile to start fresh accumulators
+    systolic_array u_array (
         .clk(clk),
         .rst(rst),
-        .clr(mac_clr),
-        .enable(mac_enable),
+        .clr(array_clr),
+        .enable(array_enable),
 
-        .a(a0_fifo_data),
-        .b(b0_fifo_data),
-        .acc(c00_acc)
+        .A0(fifo_valid[0] ? a0_fifo_data : 8'sd0),
+        .A1(fifo_valid[1] ? a1_fifo_data : 8'sd0),
+        .B0(fifo_valid[0] ? b0_fifo_data : 8'sd0),
+        .B1(fifo_valid[1] ? b1_fifo_data : 8'sd0),
+
+        .C00(c00_acc),
+        .C01(c01_acc),
+        .C10(c10_acc),
+        .C11(c11_acc)
     );
 
-    mac u_mac01 (
-        .clk(clk),
-        .rst(rst),
-        .clr(mac_clr),
-        .enable(mac_enable),
-
-        .a(a0_fifo_data),
-        .b(b1_fifo_data),
-        .acc(c01_acc)
-    );
-
-    mac u_mac10 (
-        .clk(clk),
-        .rst(rst),
-        .clr(mac_clr),
-        .enable(mac_enable),
-
-        .a(a1_fifo_data),
-        .b(b0_fifo_data),
-        .acc(c10_acc)
-    );
-
-    mac u_mac11 (
-        .clk(clk),
-        .rst(rst),
-        .clr(mac_clr),
-        .enable(mac_enable),
-
-        .a(a1_fifo_data),
-        .b(b1_fifo_data),
-        .acc(c11_acc)
-    );
-
-    // C SRAM has one write port, so store one MAC result per STORE cycle.
+    // C SRAM has one write port, so store one array result per STORE cycle.
     always_comb begin
         case (c_sel)
             C00_SELECT: begin

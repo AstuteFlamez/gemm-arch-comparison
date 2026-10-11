@@ -1,0 +1,15 @@
+{
+  "target_db": "/srv/auto/apps/saed32_edk/2023/lib/stdcell_rvt/db_nldm/saed32rvt_tt1p05v25c.db",
+  "library_name": "saed32rvt_tt1p05v25c",
+  "operating_condition": "tt1p05v25c",
+  "library_time_unit_ns": 1.0,
+  "clock_period_ns": 10.0,
+  "clock_uncertainty_ns": 0.1,
+  "clock_transition_ns": 0.1,
+  "input_delay_ns": 1.0,
+  "output_delay_ns": 1.0,
+  "input_transition_ns": 0.1,
+  "output_load_library_units": 10.0,
+  "wire_load_model": "8000",
+  "library_note": "SAED32/28 educational RVT, NLDM typical corner: process multiplier 1.0, 1.05 V, 25 C. Units: 1 ns, 1 fF, 1 V; DC reports dynamic power in uW and leakage in pW. One reported cell-area unit equals one square micrometer, verified against the installed manual and a matching reference cell; see docs/saed32-area-units.json. Liberty timing/internal-power/leakage data and a tiny DC power probe were checked on CAE on 2026-10-08; an 8x8 VCS/DC check of both full GEMM cores subsequently passed. The subsequent three-seed 8/16/32 study passed 100 measured random pairs plus 10 warmups per size and core in all 18 configurations; see docs/EXPERIMENT.md. Output load is 10 fF per port bit. Fixed library wire-load model 8000, top mode, automatic selection disabled for both designs and all sizes; this is a common pre-layout assumption, not extracted wiring or an assertion about design area. Clock and I/O settings are baseline assumptions, not measured Fmax or board constraints."
+}

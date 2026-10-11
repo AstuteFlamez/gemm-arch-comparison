@@ -1,0 +1,155 @@
+{
+  "status": "accepted_for_pre_layout_comparison",
+  "reviewed_utc": "2026-10-09T01:38:17.318257+00:00",
+  "configurations": 18,
+  "distinct_random_input_pairs": 900,
+  "measured_multiplications": 1800,
+  "warmup_multiplications": 180,
+  "checked_output_elements": 887040,
+  "report_bundle_sha256": "a9d8be0bcb16348f729ea80735e98081b54739e8a18b3af5b38de377562314de",
+  "report_bundle_bytes": 565751,
+  "source_matches_current_workspace": {
+    "rtl/conventional_matmul/conventional_gemm.sv": true,
+    "rtl/conventional_matmul/conventional_tile_controller.sv": true,
+    "rtl/fifo.sv": true,
+    "rtl/mac.sv": true,
+    "rtl/memory/memory_wrapper.sv": true,
+    "rtl/memory/sram.sv": true,
+    "rtl/systolic_array/pe.sv": true,
+    "rtl/systolic_array/systolic_array.sv": true,
+    "rtl/systolic_array/systolic_gemm.sv": true,
+    "rtl/systolic_array/systolic_tile_controller.sv": true,
+    "rtl/top_level_controller.sv": true,
+    "tb/tb_gemm_ppa.sv": true,
+    "scripts/run_gemm_ppa.py": true,
+    "scripts/synopsys/dc_ppa.tcl": true,
+    "tests/gen_gemm_vectors.py": true,
+    "tests/gen_vectors.py": true
+  },
+  "checks": {
+    "correctness": true,
+    "common_source_library_clock_io_and_wire_model": true,
+    "fresh_synthesis_every_seed": true,
+    "same_fixtures_both_architectures": true,
+    "area_cells_slack_and_cycles_invariant_across_seeds": true,
+    "all_targets_meet_100mhz": true,
+    "setup_hold_design_rule_violations": 0,
+    "unconstrained_endpoints": 0,
+    "false_or_multicycle_paths": 0,
+    "port_and_sequential_activity_coverage_percent": 100,
+    "nonzero_saif_tx_records": 0,
+    "power_warnings": 0,
+    "power_components_consistent_with_dynamic_total": true,
+    "area_unit_verified_um2": true,
+    "three_pdf_pages_visually_reviewed": true,
+    "local_ppa_python_tests_passed": 11
+  },
+  "high_fanout_review": {
+    "seed": 20261008,
+    "threshold": 1000,
+    "records": [
+      {
+        "matrix_dim": 8,
+        "architecture": "systolic",
+        "net": "clk",
+        "connected_leaf_objects": 3662
+      },
+      {
+        "matrix_dim": 8,
+        "architecture": "conventional",
+        "net": "clk",
+        "connected_leaf_objects": 3598
+      },
+      {
+        "matrix_dim": 16,
+        "architecture": "systolic",
+        "net": "clk",
+        "connected_leaf_objects": 13151
+      },
+      {
+        "matrix_dim": 16,
+        "architecture": "conventional",
+        "net": "clk",
+        "connected_leaf_objects": 13087
+      },
+      {
+        "matrix_dim": 32,
+        "architecture": "systolic",
+        "net": "clk",
+        "connected_leaf_objects": 50544
+      },
+      {
+        "matrix_dim": 32,
+        "architecture": "conventional",
+        "net": "clk",
+        "connected_leaf_objects": 50480
+      }
+    ],
+    "note": "Connected-object counts include the clock port; only the clock net was returned in each of the six designs."
+  },
+  "warning_review": {
+    "ELAB-311": "The two-bit result selector covers every value; its defensive default cannot be reached.",
+    "VER-318": "Reviewed explicit product sign extension and nonnegative parameter/counter comparisons. Directed signed-edge and random tests pass.",
+    "LINT-1": "Unused elaboration intermediates removed by optimization; no public result output is discarded in the tested behavior.",
+    "LINT-28": "Unconnected constant or unused DesignWare arithmetic ports.",
+    "LINT-29": "Optimized direct arithmetic port connections.",
+    "LINT-31": "Shared constant/control connections, including even tile-coordinate low bits and FIFO controls.",
+    "LINT-32": "Constant arithmetic/control input connections.",
+    "LINT-33": "Repeated arithmetic input connections after optimization.",
+    "LINT-52": "Tile coordinates advance by two; their low bits are constant zero.",
+    "TIM-134": "Reopened the six first-seed mapped designs: clk was the sole net above threshold 1000. Clock distribution remains ideal.",
+    "UCN-1": "Generated Verilog naming for nets shared between ports.",
+    "UCN-4": "Generated Verilog replacement-character naming warning.",
+    "VO-4": "The generated Verilog writer emits assign/tran constructs; mapped-netlist equivalence was not performed."
+  },
+  "measurement_scope": "Full GEMM core including controllers, FIFOs, and register-based memories. Compute time is accepted-start through done; power and energy cover external load, compute, and readback. Primary high-effort power.rpt fields supply numerical values; low-effort hierarchy power is not summed into graph data.",
+  "limitations": [
+    "Pre-layout wire-load estimates and RTL SAIF, without extracted routing, physical clock tree, or gate-delay glitch activity.",
+    "Educational SAED32 RVT typical corner, 1.05 V, 25 C; dense uniform signed INT8 workload.",
+    "No SRAM macros, retiming, added clock gating, maximum-frequency sweep, formal or gate-level equivalence, FPGA or silicon measurements.",
+    "64x64 values are conditional extrapolations; no 64x64 RTL simulation or synthesis was performed.",
+    "Power seed ranges and model-choice sensitivity spans are not confidence intervals."
+  ],
+  "analysis_source_sha256": {
+    "scripts/plot_gemm_ppa.py": "bcaaaed2fdc14fd257a93587bbc0d10610c55877571b8fcb3f81972a499a612f",
+    "scripts/export_gemm_ppa.py": "bd7a3c353a68d1dc24c6857236350d9277684c9d04d07f3f484bcc066e7fbc67",
+    "scripts/requirements-ppa-plots.txt": "2b7af937bbd6f44236acaeb7316c2aa376d5a1a81c1d776a2d66ae70a54b837b",
+    "docs/saed32-area-units.json": "95abb5e304530999b8c6c94814893c42801e4bbfe6d041fcfea9feefce0d74ef"
+  },
+  "artifact_sha256": {
+    "average-power.png": "3700ac89b2a9f3c2bfd6daf447770b6a7e9e5669a8724e1c33cd66ee62e25220",
+    "average-power.svg": "27bcd6bc945efd17baf03d9e39c978629852ae807e94d7c3a078c81b4a987410",
+    "cell-area.png": "17618d6ab0f7e612f90810e28d1dadeb6c73f1b9725a8c71f96e8e53bede4a95",
+    "cell-area.svg": "500e8da6961be677161f488dc111117c5b07d6ed20aea4a8c61a306b59e8dd70",
+    "completed-study.json": "d57ab7ec749af9657adfcdafa5ad0d27cd88b2f41e5ee815b2e3949a883b37bb",
+    "compute-time.png": "b9760b0b0cf1a8fd023bccde5169b1d0ab07bacd0e9ca4cf28da7c3bcba80131",
+    "compute-time.svg": "68176912d159f76c30d515ca4606dfacaf8b006fdcfbf9a9a5c15b9b802d4ca9",
+    "means.csv": "faefbd87983aa0d665c24316d08a7eea31e6d59c8b5761bf8d6fc9d53f7444cf",
+    "measurements.csv": "9d4a6e24840041272579fe1ddd68cda10f80e1b91b3f7577dd49520d4aceb54e",
+    "ppa-graphs.pdf": "2901da394066d9a96744319b0038d43dd992f58336745d9f992b0d7aeb936d91",
+    "reports.zip": "a9d8be0bcb16348f729ea80735e98081b54739e8a18b3af5b38de377562314de",
+    "results.json": "e000f1dd4c01dd93fdc9bad3663bf5331c7e363988c0fa3020f5ff2fa4df8ed4"
+  },
+  "cleanup": {
+    "forwarded_port_8765_closed": true,
+    "original_remote_report_server": "Bound to loopback on linux-2621; launched with timeout 3600 at approximately 2026-10-09T01:22Z and expected to stop by 02:22Z. SSH reconnected to linux-2024; unable to verify early termination on the original host because normal SSH host verification failed. No verification was bypassed.",
+    "vendor_jobs_complete": true
+  },
+  "presentation_revision": {
+    "updated_utc": "2026-10-09T02:49:22.265657+00:00",
+    "description": "Architecture-diagram styling: dark grid, pastel outlines, grouped measured bars, separate numerical 64x64 projections. Qualified area displayed in mm^2; raw values remain in um^2.",
+    "measurements_and_models_unchanged": true,
+    "previous_plot_script_sha256": "9e6fa10e4bf2fc622c13db55a8567307f6efa20bb45422b8ce88f61fd9c7c0d4",
+    "previous_graph_sha256": {
+      "ppa-graphs.pdf": "67f1c8d07b8635391301da26c8cf8725f26db9b305d062efab58ab05372d9f7e",
+      "compute-time.svg": "47d398fa2ff83942e1dc4a0ce15499b25d2e29d49242c5012f6f17774a20f95c",
+      "compute-time.png": "6c9fe82d7721a159bb229b347f906c91a586920c44ace8d18780f6d6979e8ee1",
+      "cell-area.svg": "0cf30b6df6fc98c2799bfd21f4a3a856140935c5f118b5c23332c0e1750bdb3d",
+      "cell-area.png": "eee75e32e26594933c0e7c44e08b5458746c0418708381143e4be1738d2a3740",
+      "average-power.svg": "6631f136a6c75d1fc7a1b9dec9d7caad3859e5f908a8de58bb914159f1769263",
+      "average-power.png": "6464ad715eaa90ea5adec1b2933331c332e2784e3d11f91f18b9023c4aa49d8c"
+    },
+    "three_pdf_pages_rendered_and_visually_checked": true,
+    "ppa_python_tests_passed": 11
+  }
+}

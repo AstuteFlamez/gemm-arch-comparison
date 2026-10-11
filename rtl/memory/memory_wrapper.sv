@@ -4,7 +4,10 @@
 // All SRAM operations use the rising edge of clk; active-high reset gates access.
 // IDLE host writes populate A/B; busy compute reads A/B and writes C.
 // Addresses index matrix elements. Reset gates access without erasing stored data.
-module memory_wrapper (
+// Supported compile-time matrix dimensions: 8, 16, and 32.
+module memory_wrapper #(
+    parameter int MatrixDim = 8
+) (
     input  logic clk,
     input  logic rst,
     input  logic busy,
@@ -14,34 +17,41 @@ module memory_wrapper (
 
     // A memory
     input  logic a_we,
-    input  logic [5:0] a_wr_addr,
+    input  logic [$clog2(MatrixDim * MatrixDim) - 1:0] a_wr_addr,
     input  logic [7:0] a_wr_data,
-    input  logic [5:0] a_rd_addr,
+    input  logic [$clog2(MatrixDim * MatrixDim) - 1:0] a_rd_addr,
     output logic signed [7:0] a_rd_data,
 
     // B memory
     input  logic b_we,
-    input  logic [5:0] b_wr_addr,
+    input  logic [$clog2(MatrixDim * MatrixDim) - 1:0] b_wr_addr,
     input  logic [7:0] b_wr_data,
-    input  logic [5:0] b_rd_addr,
+    input  logic [$clog2(MatrixDim * MatrixDim) - 1:0] b_rd_addr,
     output logic signed [7:0] b_rd_data,
 
     // C memory
     input  logic c_we,
-    input  logic [5:0] c_wr_addr,
+    input  logic [$clog2(MatrixDim * MatrixDim) - 1:0] c_wr_addr,
     input  logic signed [31:0] c_wr_data,
-    input  logic [5:0] c_rd_addr,
+    input  logic [$clog2(MatrixDim * MatrixDim) - 1:0] c_rd_addr,
     output logic signed [31:0] c_rd_data
 );
 
-    localparam int MATRIX_DIM   = 8;
-    localparam int MATRIX_WORDS = MATRIX_DIM * MATRIX_DIM;
+    localparam int MATRIX_WORDS = MatrixDim * MatrixDim;
     localparam int INPUT_WIDTH  = 8;
     localparam int RESULT_WIDTH = 32;
 
     logic host_access;    // Host accesses memory while idle
     logic compute_access; // GEMM accesses memory while busy
     logic operand_re;     // A/B read request during computation
+
+    // synthesis translate_off
+    initial begin
+        if (MatrixDim != 8 && MatrixDim != 16 && MatrixDim != 32) begin
+            $fatal(1, "memory_wrapper: MatrixDim must be 8, 16, or 32");
+        end
+    end
+    // synthesis translate_on
 
     // Reset suppresses all memory operations. While busy, the compute engine
     // owns the ports; host writes are ignored and host C read data holds.

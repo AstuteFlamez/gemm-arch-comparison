@@ -1,64 +1,80 @@
 #!/usr/bin/env python3
-"""Generate reproducible INT8 GEMM operands and INT32 answers for the FPGA demo."""
+"""Generate reproducible INT8 GEMM operands and INT32 answers for simulation or FPGA."""
 
 import argparse
 import json
 from pathlib import Path
 import random
 
-from gen_vectors import constant_matrix, encode_signed
+from gen_vectors import encode_signed
 
-SIZE = 8
+SUPPORTED_SIZES = (8, 16, 32)
+DEFAULT_SIZE = 8
 DEFAULT_SEED = 20261008
 DEFAULT_RANDOM_COUNT = 100
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "fpga" / "de2_115"
 
 
+def validate_size(size):
+    if type(size) is not int or size not in SUPPORTED_SIZES:
+        raise ValueError("matrix size must be 8, 16, or 32")
+
+
+def constant_matrix(value, size):
+    return [[value for _ in range(size)] for _ in range(size)]
+
+
 def gemm(a, b):
     """Exact integer matrix product, independent of the RTL's tile schedule."""
+    size = len(a)
+    validate_size(size)
     for matrix in (a, b):
-        if len(matrix) != SIZE or any(len(row) != SIZE for row in matrix):
-            raise ValueError("each matrix must be 8 by 8")
+        if len(matrix) != size or any(len(row) != size for row in matrix):
+            raise ValueError(f"each matrix must be {size} by {size}")
         if any(type(value) is not int or not -128 <= value <= 127
                for row in matrix for value in row):
             raise ValueError("operands must be integers in [-128, 127]")
-    return [[sum(a[row][k] * b[k][column] for k in range(SIZE))
-             for column in range(SIZE)] for row in range(SIZE)]
+    return [[sum(a[row][k] * b[k][column] for k in range(size))
+             for column in range(size)] for row in range(size)]
 
 
-def generate_cases(seed=DEFAULT_SEED, random_count=DEFAULT_RANDOM_COUNT):
+def generate_cases(seed=DEFAULT_SEED, random_count=DEFAULT_RANDOM_COUNT, size=DEFAULT_SIZE):
+    validate_size(size)
     if type(seed) is not int:
         raise ValueError("seed must be an integer")
     if type(random_count) is not int or random_count < 0:
         raise ValueError("random_count must be a nonnegative integer")
-    identity = [[int(row == column) for column in range(SIZE)] for row in range(SIZE)]
-    ramp = [[8 * row + column - 32 for column in range(SIZE)] for row in range(SIZE)]
-    reverse = [[31 - 8 * row - column for column in range(SIZE)] for row in range(SIZE)]
-    mixed = [[(-1 if (row + column) % 2 else 1) * (8 * row + column + 1)
-              for column in range(SIZE)] for row in range(SIZE)]
+    identity = [[int(row == column) for column in range(size)] for row in range(size)]
+    # Wrap the ramp within INT8; keep the original 8x8 operands exactly unchanged.
+    ramp = [[(size * row + column - size * size // 2 + 128) % 256 - 128
+             for column in range(size)] for row in range(size)]
+    reverse = [[-1 - value for value in row] for row in ramp]
+    # Both signs of magnitudes 1..127 fit INT8, even for the larger dimensions.
+    mixed = [[(-1 if (row + column) % 2 else 1) * ((size * row + column) % 127 + 1)
+              for column in range(size)] for row in range(size)]
     operands = [
-        ("zero_a", constant_matrix(0), ramp),
-        ("zero_b", reverse, constant_matrix(0)),
+        ("zero_a", constant_matrix(0, size), ramp),
+        ("zero_b", reverse, constant_matrix(0, size)),
         ("left_identity", identity, ramp),
         ("right_identity", reverse, identity),
-        ("all_ones", constant_matrix(1), constant_matrix(1)),
+        ("all_ones", constant_matrix(1, size), constant_matrix(1, size)),
         ("signed_ramp", ramp, reverse),
-        ("max_positive_sum", constant_matrix(-128), constant_matrix(-128)),
-        ("max_negative_sum", constant_matrix(-128), constant_matrix(127)),
-        ("positive_extremes", constant_matrix(127), constant_matrix(127)),
+        ("max_positive_sum", constant_matrix(-128, size), constant_matrix(-128, size)),
+        ("max_negative_sum", constant_matrix(-128, size), constant_matrix(127, size)),
+        ("positive_extremes", constant_matrix(127, size), constant_matrix(127, size)),
         ("mixed_sign", mixed, reverse),
     ]
     rng = random.Random(seed)
     for index in range(random_count):
-        a = [[rng.randint(-128, 127) for _ in range(SIZE)] for _ in range(SIZE)]
-        b = [[rng.randint(-128, 127) for _ in range(SIZE)] for _ in range(SIZE)]
+        a = [[rng.randint(-128, 127) for _ in range(size)] for _ in range(size)]
+        b = [[rng.randint(-128, 127) for _ in range(size)] for _ in range(size)]
         operands.append((f"random_{index:04d}", a, b))
     return [{"name": name, "a": a, "b": b, "c": gemm(a, b)} for name, a, b in operands]
 
 
-def render_vectors(seed=DEFAULT_SEED, random_count=DEFAULT_RANDOM_COUNT):
+def render_vectors(seed=DEFAULT_SEED, random_count=DEFAULT_RANDOM_COUNT, size=DEFAULT_SIZE):
     """Keep the ROM images, RTL dimensions, and human-readable manifest together."""
-    cases = generate_cases(seed, random_count)
+    cases = generate_cases(seed, random_count, size)
     files = {}
     for filename, key, bits in (("inputs_a.hex", "a", 8), ("inputs_b.hex", "b", 8),
                                 ("expected.hex", "c", 32)):
@@ -69,15 +85,20 @@ def render_vectors(seed=DEFAULT_SEED, random_count=DEFAULT_RANDOM_COUNT):
     files["gemm_vectors.svh"] = (
         "// Generated by tests/gen_gemm_vectors.py; regenerate all vector files together.\n"
         f"// Seed: {seed}; {len(cases) - random_count} directed + {random_count} random pairs.\n"
+        f"localparam integer VECTOR_MATRIX_DIM = {size};\n"
+        f"localparam integer VECTOR_WORDS_PER_CASE = {size * size};\n"
         f"localparam integer CASE_COUNT = {len(cases)};\n"
     )
     files["vectors_manifest.json"] = json.dumps({
-        "format": "gemm-board-vectors-v1",
+        "format": "gemm-vectors-v2",
+        "matrix_dim": size,
+        "input_bits": 8,
+        "result_bits": 32,
         "seed": seed,
         "random_count": random_count,
         "directed_count": len(cases) - random_count,
         "case_count": len(cases),
-        "words_per_case": SIZE * SIZE,
+        "words_per_case": size * size,
         "layout": "case-major, then row-major; two's-complement hex",
         "cases": [case["name"] for case in cases],
     }, indent=2) + "\n"
@@ -86,27 +107,35 @@ def render_vectors(seed=DEFAULT_SEED, random_count=DEFAULT_RANDOM_COUNT):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--size", type=int, choices=SUPPORTED_SIZES, default=DEFAULT_SIZE)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--random-count", type=int, default=DEFAULT_RANDOM_COUNT)
-    parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--out-dir", type=Path,
+                        help="default: FPGA directory for size 8; build/gemm-vectors/<size> otherwise")
     parser.add_argument("--check", action="store_true", help="verify files without changing them")
     args = parser.parse_args()
     if args.random_count < 0:
         parser.error("--random-count must be nonnegative")
-    files = render_vectors(args.seed, args.random_count)
+    if args.out_dir is None:
+        args.out_dir = (DEFAULT_OUTPUT if args.size == DEFAULT_SIZE else
+                        DEFAULT_OUTPUT.parents[1] / "build" / "gemm-vectors" / str(args.size))
+    if args.size != DEFAULT_SIZE and args.out_dir.resolve() == DEFAULT_OUTPUT.resolve():
+        parser.error("the DE2-115 demo uses size 8; select a separate --out-dir for larger matrices")
+    files = render_vectors(args.seed, args.random_count, args.size)
     if args.check:
         stale = [name for name, text in files.items()
                  if not (args.out_dir / name).is_file()
                  or (args.out_dir / name).read_text(encoding="ascii") != text]
         if stale:
-            parser.exit(1, "Missing or stale FPGA vectors: " + ", ".join(stale)
-                        + ". Regenerate with make de2-115-vectors.\n")
+            parser.exit(1, "Missing or stale GEMM vectors: " + ", ".join(stale)
+                        + ". Rerun the same generator command without --check.\n")
     else:
         args.out_dir.mkdir(parents=True, exist_ok=True)
         for name, text in files.items():
             (args.out_dir / name).write_text(text, encoding="ascii")
     action = "Verified" if args.check else "Generated"
-    print(f"{action} 10 directed + {args.random_count} random GEMM pairs; seed={args.seed}")
+    print(f"{action} 10 directed + {args.random_count} random {args.size}x{args.size} "
+          f"GEMM pairs; seed={args.seed}; directory={args.out_dir}")
 
 
 if __name__ == "__main__":

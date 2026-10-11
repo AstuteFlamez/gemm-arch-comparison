@@ -1,0 +1,15 @@
+{
+  "target_db": "/replace/with/approved/standard_cells.db",
+  "library_name": "REPLACE_WITH_INTERNAL_LIBRARY_NAME",
+  "operating_condition": "REPLACE_WITH_LIBRARY_CORNER",
+  "library_time_unit_ns": 1.0,
+  "clock_period_ns": 10.0,
+  "clock_uncertainty_ns": 0.1,
+  "clock_transition_ns": 0.1,
+  "input_delay_ns": 1.0,
+  "output_delay_ns": 1.0,
+  "input_transition_ns": 0.1,
+  "output_load_library_units": 0.01,
+  "wire_load_model": "",
+  "library_note": "REPLACE: process, voltage, temperature, time/capacitance/area units and evidence of internal/leakage power models"
+}

@@ -2,9 +2,11 @@
 `default_nettype none
 
 module tb_de2_115_gemm;
+    parameter bit UseConventional = 1'b0;
     `include "gemm_vectors.svh"
     localparam integer VECTOR_WORDS = CASE_COUNT * 64;
     localparam integer SUITE_LIMIT = CASE_COUNT * 900 + 100;
+    localparam integer CORE_CYCLES = UseConventional ? 512 : 544;
     logic clk = 0;
     logic [1:0] KEY = 2'b11;
     logic LED_READY, LED_BUSY, LED_PASS, LED_FAIL;
@@ -16,17 +18,58 @@ module tb_de2_115_gemm;
     integer loads = 0;
     integer checks = 0;
     integer abort_offsets [0:5];
+    integer elapsed_core_cycles = 0;
+    integer timed_jobs = 0;
+    bit timing_job = 0;
     bit injecting_fault = 0;
+    bit injecting_timeout = 0;
     logic signed [7:0] vectors_a [0:VECTOR_WORDS-1];
     logic signed [7:0] vectors_b [0:VECTOR_WORDS-1];
 
     initial begin
+        if (VECTOR_MATRIX_DIM != 8 || VECTOR_WORDS_PER_CASE != 64) begin
+            $fatal(1, "DE2-115 demo requires 8x8 fixtures");
+        end
         $readmemh("inputs_a.hex", vectors_a);
         $readmemh("inputs_b.hex", vectors_b);
     end
 
     always #10 clk = ~clk;
-    de2_115_gemm_top dut (.*);
+    de2_115_gemm_top #(
+        .UseConventional(UseConventional)
+    ) dut (
+        .clk(clk),
+        .KEY(KEY),
+        .LED_READY(LED_READY),
+        .LED_BUSY(LED_BUSY),
+        .LED_PASS(LED_PASS),
+        .LED_FAIL(LED_FAIL)
+    );
+
+    // Count accepted start to registered done, excluding loading and readback.
+    // The launch edge is cycle zero; sample done after nonblocking updates.
+    always @(posedge clk) begin
+        if (dut.core_rst) begin
+            timing_job = 0;
+            elapsed_core_cycles = 0;
+        end else if (dut.core_start && !dut.core_busy) begin
+            timing_job = 1;
+            elapsed_core_cycles = 0;
+        end else if (timing_job && !injecting_timeout) begin
+            elapsed_core_cycles = elapsed_core_cycles + 1;
+            #1;
+            if (dut.core_done === 1'b1) begin
+                if (elapsed_core_cycles != CORE_CYCLES || dut.core_busy !== 1'b0) begin
+                    $fatal(1, "expected %0d core clocks, got %0d",
+                           CORE_CYCLES, elapsed_core_cycles);
+                end
+                timing_job = 0;
+                timed_jobs = timed_jobs + 1;
+            end else if (elapsed_core_cycles >= CORE_CYCLES) begin
+                $fatal(1, "core missed completion at clock %0d", CORE_CYCLES);
+            end
+        end
+    end
 
     // Mathematical oracle independent of the stored expected.hex words.
     function automatic integer reference(input integer case_number, input integer address);
@@ -133,6 +176,7 @@ module tb_de2_115_gemm;
     initial begin : tests
         integer previous_jobs;
         integer fault_case, fault_word;
+        $display("Board architecture: %s", UseConventional ? "conventional" : "systolic");
         // Initial reset must work after configuration without pressing KEY0.
         repeat (6) tick();
         if ({LED_READY, LED_BUSY, LED_PASS, LED_FAIL} !== 4'b1000)
@@ -194,9 +238,11 @@ module tb_de2_115_gemm;
         release_start();
         while (dut.case_index_q != CASE_COUNT/2 || dut.state_q != dut.WAIT_CORE)
             @(negedge clk);
+        injecting_timeout = 1;
         force dut.core_done = 1'b0;
         await_result(0, 5000);
         release dut.core_done;
+        injecting_timeout = 0;
         press_start();
         release_start();
         await_result(1);
@@ -209,8 +255,8 @@ module tb_de2_115_gemm;
         abort_offsets[1] = 9;
         abort_offsets[2] = 20;
         abort_offsets[3] = 31;
-        abort_offsets[4] = 544;
-        abort_offsets[5] = 570;
+        abort_offsets[4] = CORE_CYCLES;
+        abort_offsets[5] = CORE_CYCLES + 26;
         for (integer i = 0; i < 6; i = i + 1) begin
             press_start();
             release_start();
@@ -235,6 +281,7 @@ module tb_de2_115_gemm;
         rst_board();
 
         $display("PASS: %0d full suites; %0d total output checks", suites_passed, total_checks);
+        $display("PASS: %0d completed jobs took exactly %0d core clocks", timed_jobs, CORE_CYCLES);
         $display("PASS: DE2-115 power-up, consecutive pairs, sticky LEDs, held/busy button behavior");
         $display("PASS: first/middle/final faults, later-pair timeout, reset during loading, work and between pairs");
         $finish;

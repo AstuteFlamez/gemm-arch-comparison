@@ -1,0 +1,19 @@
+{
+  "status": "verified",
+  "reviewed_date": "2026-10-08",
+  "library_name": "saed32rvt_tt1p05v25c",
+  "library_sha256": "0b67efcfcdcfbb67f0a5b0928a3befc6363c55a2e272324a8875cc99cab099a4",
+  "unit": "um^2",
+  "scale_from_report": 1,
+  "manual_on_cae": "/srv/auto/apps/saed32_edk/2023/doc/SAED32.28nm_Digital_Standard_Cell_Library_b100_01312012.pdf",
+  "manual_revision": "1.0.0, Synopsys Armenia Educational Department, 2012",
+  "manual_page": 65,
+  "manual_table": "5.64",
+  "manual_cell": "DFFX1",
+  "library_cell": "DFFX1_RVT",
+  "manual_area_um2": 6.607744,
+  "liberty_area": 6.607744,
+  "dc_reference_area": 6.607744,
+  "method": "Read and visually inspected the complete manual page rendered with pdftoppm. The area column explicitly uses um^2. Matched DFFX1's area to DFFX1_RVT in the selected tt1p05v25c Liberty file and the first-seed 32x32 systolic references.rpt generated from the hashed DB.",
+  "scope": "Sum of mapped standard-cell areas, not placed core area, die area, or routing area. The manual and licensed library remain on CAE."
+}
