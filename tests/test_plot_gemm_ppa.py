@@ -23,7 +23,7 @@ class PlotDataTests(unittest.TestCase):
             self.assertEqual(scheduled_cycles(size,"conventional"),conventional)
 
     def test_area_unit_evidence_must_match_library(self):
-        review_path = Path(__file__).resolve().parents[1] / "docs/saed32-area-units.json"
+        review_path = Path(__file__).resolve().parents[1] / "docs/json/saed32-area-units.json"
         evidence = json.loads(review_path.read_text())
         metadata = {"library_sha256": evidence["library_sha256"],
                     "config": {"library_name": evidence["library_name"]}}

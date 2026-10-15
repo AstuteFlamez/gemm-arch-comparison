@@ -108,8 +108,8 @@ make check
 ```
 
 This runs Python support tests, RTL unit/controller tests, both GEMM cores and
-matched comparisons at all three sizes, and simulations of both DE2-115 FPGA
-wrappers. [GitHub Actions](.github/workflows/ci.yml) runs the same command on
+matched comparisons at all three sizes.
+[GitHub Actions](.github/workflows/ci.yml) runs the same command on
 pushes and pull requests. These checks use freely available tools; reproducing
 the ASIC area and power study requires Synopsys and library access. See the
 [setup guide](docs/SETUP_GUIDE.md) for the complete flow.
@@ -129,7 +129,7 @@ tb/       SystemVerilog testbenches
 tests/    Python generators and support tests
 scripts/  Simulation, synthesis, and plotting tools
 docs/     Documentation, diagrams, and results
-fpga/     Optional DE2-115 demo (only 8x8)
+fpga/     Optional local DE2-115 demo (ignored by Git)
 build/    Generated local outputs (ignored by Git)
 ```
 

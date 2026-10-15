@@ -18,7 +18,8 @@ TCLSH = shutil.which("tclsh")
 class FpgaSetupTests(unittest.TestCase):
     def run_tcl(self, script, **environment):
         return subprocess.run(
-            [TCLSH], input=script, text=True, capture_output=True, cwd=BOARD,
+            [TCLSH], input=script, text=True, capture_output=True,
+            cwd=BOARD if BOARD.is_dir() else ROOT,
             env={**os.environ, **environment}, check=False,
         )
 
@@ -32,6 +33,7 @@ if {[catch {source $env(TEST_QSF)} message]} {puts stderr $message; exit 1}
         self.assertEqual(result.returncode, 0, result.stderr)
         return [tuple(line.split("\t")) for line in result.stdout.splitlines()]
 
+    @unittest.skipUnless(BOARD.is_dir(), "Optional local FPGA project is not present")
     def test_revisions_share_settings_and_select_only_their_core(self):
         revisions = ("gemm_de2_115", "gemm_de2_115_conventional")
         common = []

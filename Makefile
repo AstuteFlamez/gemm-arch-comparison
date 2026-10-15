@@ -79,7 +79,7 @@ help:
 	  '  make test-fifo    Run FIFO ordering, boundary, reset, and random checks' \
 	  '  make test-fifo-configs Test parameterized RTL at depths 2/4/6/8 and widths 1/8/15/32' \
 	  '  make test-fifo-vcs Run the same FIFO checks with VCS' \
-	  '  make check       Run the full local/CI regression (Python, RTL, all GEMM sizes, FPGA wrappers)'
+	  '  make check       Run the local/CI regression (Python, RTL, all GEMM sizes)'
 
 env:
 	$(PYTHON) scripts/check_env.py --output build/environment.json
@@ -249,4 +249,4 @@ test-fifo-vcs:
 
 test-rtl-units: test-mac test-pe test-sram test-fifo test-fifo-configs test-systolic-array test-gemm-controller test-systolic-tile-controller test-conventional-tile-controller
 
-check: env test-rtl-units test-gemm-all-sizes test-de2-115
+check: env test-rtl-units test-gemm-all-sizes

@@ -5,4 +5,4 @@ __pycache__/
 *.vpd
 *.fsdb
 .DS_Store
-/fpga/*
+/fpga/

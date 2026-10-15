@@ -17,8 +17,8 @@ make check
 ```
 
 This inventories the local tools, checks the Python helpers, runs RTL unit and
-controller tests, exercises both cores and matched comparisons at 8×8, 16×16,
-and 32×32, and simulates both DE2-115 wrappers. Any failed check exits nonzero.
+controller tests, and exercises both cores and matched comparisons at 8×8,
+16×16, and 32×32. Any failed check exits nonzero.
 `make smoke` is a shorter tool check using the existing MAC testbench;
 `make smoke-vcs` runs that testbench on a configured VCS machine.
 
@@ -46,7 +46,7 @@ it does not represent a new Synopsys PPA study or a physical board test.
 
 ## GitHub presentation metadata
 
-[github-about.json](github-about.json) is a local draft of the repository's
+[github-about.json](json/github-about.json) is a local draft of the repository's
 About description and topics. Copy those values into GitHub's About settings
 when ready; GitHub does not apply this file automatically.
 
@@ -129,17 +129,21 @@ python3 -m venv build/ppa-plot-venv
 build/ppa-plot-venv/bin/python -m pip install -r scripts/requirements-ppa-plots.txt
 build/ppa-plot-venv/bin/python scripts/plot_gemm_ppa.py \
   build/study-reports/seed-* --out build/study-graphs \
-  --area-units-review docs/saed32-area-units.json
+  --area-units-review docs/json/saed32-area-units.json
 ```
 
 The plotter requires three complete seeds and checks fixture/source consistency,
 correctness, timing, and activity coverage. It writes SVG/PNG graphs, a PDF,
 CSV measurements, and JSON model details. Vendor warnings still need review.
 
-The [area-unit evidence](saed32-area-units.json) must match the library hash to
+The [area-unit evidence](json/saed32-area-units.json) must match the library hash to
 show physical area; the graphs convert µm² to mm². With another library, omit
 that option until its units are qualified. CSV fields retain `*_library_units`;
 for this SAED32 library, one report unit equals one µm².
 
 Read the [experiment](EXPERIMENT.md) for the completed findings and limitations.
-The optional 8×8 FPGA demo has a separate [DE2-115 guide](../fpga/de2_115/README.md).
+The optional 8×8 FPGA project is kept locally under the ignored `fpga/` folder.
+If you have it, run `make test-de2-115` to simulate both board wrappers; its
+`fpga/de2_115/README.md` covers the board setup. These simulations are separate
+from `make check`. The Python board-configuration check is skipped when the
+local project is absent; report-export checks still run.

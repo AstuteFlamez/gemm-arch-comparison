@@ -1,7 +1,0 @@
-# Conventional revision; only this architecture is included in this build.
-source [file join [file dirname [info script]] gemm_de2_115_common.qsf]
-set_parameter -name UseConventional 1
-set_global_assignment -name PROJECT_OUTPUT_DIRECTORY ../../build/quartus/de2_115-conventional
-
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/conventional_matmul/conventional_tile_controller.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/conventional_matmul/conventional_gemm.sv

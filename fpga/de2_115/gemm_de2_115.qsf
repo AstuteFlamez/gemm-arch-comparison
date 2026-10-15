@@ -1,9 +1,0 @@
-# Systolic revision; retain the original revision name and bitstream location.
-source [file join [file dirname [info script]] gemm_de2_115_common.qsf]
-set_parameter -name UseConventional 0
-set_global_assignment -name PROJECT_OUTPUT_DIRECTORY ../../build/quartus/de2_115
-
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/systolic_array/pe.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/systolic_array/systolic_array.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/systolic_array/systolic_tile_controller.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/systolic_array/systolic_gemm.sv
