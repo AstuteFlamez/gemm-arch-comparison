@@ -6,7 +6,23 @@ study; the runner, exporter, and plotter reject existing output paths.
 
 ## Local simulation
 
-Install Python 3, Make, and Icarus Verilog (`iverilog` and `vvp`), then run:
+Install Python 3.10+, Make, Icarus Verilog (`iverilog` and `vvp`), and Tcl
+(`tclsh`, used by the Python tests for FPGA configuration and report tooling).
+No third-party Python packages are needed for the regression suite.
+
+Run the same regression used by GitHub Actions:
+
+```sh
+make check
+```
+
+This inventories the local tools, checks the Python helpers, runs RTL unit and
+controller tests, exercises both cores and matched comparisons at 8×8, 16×16,
+and 32×32, and simulates both DE2-115 wrappers. Any failed check exits nonzero.
+`make smoke` is a shorter tool check using the existing MAC testbench;
+`make smoke-vcs` runs that testbench on a configured VCS machine.
+
+To run just the GEMM regressions and the isolated PPA benchmark:
 
 ```sh
 make env
@@ -14,10 +30,25 @@ make test-gemm-all-sizes
 make test-gemm-ppa PPA_SIZES="8 16 32"
 ```
 
-These check the Python helpers, both cores, matched input comparisons, and the
-isolated PPA benchmark. Logs and cycle counts go under `build/`. For a smaller
-check, use `make test-gemm-comparison MATRIX_DIM=8`. Local simulation produces
-correctness and timing counts; area and power require the Synopsys flow below.
+Logs and cycle counts go under `build/`. For a smaller check, use
+`make test-gemm-comparison MATRIX_DIM=8`. With the default seed and case count,
+this checks 110 identical matrix pairs, prints `PASS` for both cores, and reports
+544 systolic clocks versus 512 conventional clocks per multiplication.
+Local simulation produces correctness and timing counts; area and power require
+the Synopsys flow below.
+
+The [CI workflow](../.github/workflows/ci.yml) uses Ubuntu 24.04 and Python 3.12,
+installs Icarus and Tcl, and runs `make check` on pushes, pull requests, or manual
+dispatches. It retains simulation logs, cycle counts, and fixture manifests as
+the `regression-evidence` artifact for 14 days, including logs from failed runs.
+The README's status badge reflects workflow runs on `master` after publication;
+it does not represent a new Synopsys PPA study or a physical board test.
+
+## GitHub presentation metadata
+
+[github-about.json](github-about.json) is a local draft of the repository's
+About description and topics. Copy those values into GitHub's About settings
+when ready; GitHub does not apply this file automatically.
 
 ## Synopsys on CAE
 

@@ -1,0 +1,11 @@
+{
+  "description": "SystemVerilog GEMM architecture comparison with matched four-MAC designs, regression verification, and Synopsys PPA analysis.",
+  "topics": [
+    "systemverilog",
+    "rtl",
+    "gemm",
+    "systolic-array",
+    "fpga",
+    "computer-architecture"
+  ]
+}

@@ -4,7 +4,6 @@ IVERILOG ?= iverilog
 VVP ?= vvp
 VCS ?= vcs
 SEED ?= 20260917
-RANDOM_COUNT ?= 100
 MATRIX_DIM ?= 8
 GEMM_SEED ?= 20261008
 GEMM_RANDOM_COUNT ?= 100
@@ -22,7 +21,7 @@ GEMM_RTL = $(GEMM_COMMON_RTL) $(SYSTOLIC_RTL)
 GEMM_SOURCES = $(GEMM_RTL) tb/tb_gemm.sv
 QUARTUS_SH ?= quartus_sh
 
-.PHONY: help env smoke smoke-vcs test-python vectors mac-compile test-mac test-mac-vcs gemv-compile test-gemv test-gemv-vcs test-gemv-full test-gemv-full-vcs gemm-compile test-gemm test-gemm-vcs sram-compile test-sram check
+.PHONY: help env smoke smoke-vcs test-python mac-compile test-mac test-mac-vcs gemm-compile test-gemm test-gemm-vcs sram-compile test-sram check test-rtl-units
 .PHONY: gemm-controller-compile test-gemm-controller test-gemm-controller-vcs
 .PHONY: fifo-compile test-fifo test-fifo-vcs test-fifo-configs
 .PHONY: pe-compile test-pe
@@ -40,23 +39,18 @@ PPA_TOOL_PREFIX ?=
 
 help:
 	@printf '%s\n' \
-	  'Current milestone: compare the four-MAC conventional and systolic GEMM cores' \
+	  'Compare the four-MAC conventional and systolic GEMM cores' \
 	  '  make env        Find tools in this shell; write build/environment.json' \
-	  '  make smoke      Compile/run the local Icarus environment test' \
-	  '  make smoke-vcs  Compile/run the same test on a configured VCS machine' \
+	  '  make smoke      Compile/run the MAC testbench with Icarus' \
+	  '  make smoke-vcs  Compile/run the MAC testbench on a configured VCS machine' \
 	  '  make test-python Run independent oracle and file-format checks' \
-	  '  make vectors     Generate 10 directed + RANDOM_COUNT seeded random cases' \
+	  '  make test-rtl-units Run shared hardware, datapath, and controller tests' \
 	  '  make mac-compile Compile the MAC and its testbench without simulating' \
 	  '  make test-mac    Run your MAC testbench locally with Icarus' \
 	  '  make test-mac-vcs Run MAC checks inside the configured CAE container' \
 	  '  make test-pe     Run PE accumulation, enable, forwarding, and reset checks' \
 	  '  make test-systolic-array Run 2x2 array arithmetic, zero padding, pause, and reset checks' \
 	  '  make test-systolic-tile-controller Run tile loading, compute, writeback, reset, and timing checks' \
-	  '  make gemv-compile Compile the GEMV core and testbench without simulating' \
-	  '  make test-gemv    Run the five basic GEMV tests locally' \
-	  '  make test-gemv-vcs Run the basic GEMV tests on CAE' \
-	  '  make test-gemv-full Run the full arithmetic/protocol regression locally' \
-	  '  make test-gemv-full-vcs Run the full regression on CAE' \
 	  '  make gemm-compile Compile the GEMM core and its testbench' \
 	  '  make test-gemm    Run systolic arithmetic/protocol checks (MATRIX_DIM=8/16/32)' \
 	  '  make test-gemm-vcs Run GEMM checks on a configured VCS machine' \
@@ -85,27 +79,17 @@ help:
 	  '  make test-fifo    Run FIFO ordering, boundary, reset, and random checks' \
 	  '  make test-fifo-configs Test parameterized RTL at depths 2/4/6/8 and widths 1/8/15/32' \
 	  '  make test-fifo-vcs Run the same FIFO checks with VCS' \
-	  '  make check       Run env, local smoke, and Python checks' \
-	  'make check covers support checks only; run test-mac, test-gemv-full, and test-gemm for RTL.'
+	  '  make check       Run the full local/CI regression (Python, RTL, all GEMM sizes, FPGA wrappers)'
 
 env:
 	$(PYTHON) scripts/check_env.py --output build/environment.json
 
-smoke:
-	@mkdir -p build/env
-	$(IVERILOG) -g2012 -Wall -s tb_env_smoke -o build/env/env-smoke.vvp tb/tb_env_smoke.sv > build/env/iverilog-compile.log 2>&1 || { cat build/env/iverilog-compile.log; exit 1; }
-	cd build/env && $(VVP) -l iverilog-run.log env-smoke.vvp
+smoke: test-mac
 
-smoke-vcs:
-	@mkdir -p build/env/vcs
-	cd build/env/vcs && $(VCS) -full64 -sverilog -top tb_env_smoke ../../../tb/tb_env_smoke.sv -o simv -l compile.log
-	cd build/env/vcs && ./simv -l run.log
+smoke-vcs: test-mac-vcs
 
 test-python:
 	$(PYTHON) -m unittest discover -s tests -p 'test_*.py' -v
-
-vectors: test-python
-	$(PYTHON) tests/gen_vectors.py --seed $(SEED) --random-count $(RANDOM_COUNT) --out-dir build/vectors
 
 mac-compile:
 	@mkdir -p build/mac
@@ -132,28 +116,6 @@ systolic-array-compile:
 
 test-systolic-array: systolic-array-compile
 	cd build/systolic-array && $(VVP) -l run.log systolic-array.vvp +SEED=$(SEED)
-
-gemv-compile:
-	@mkdir -p build/gemv
-	$(IVERILOG) -g2012 -Wall -s tb_gemv -o build/gemv/gemv.vvp rtl/mac.sv rtl/gemv/gemv.sv tb/tb_gemv.sv > build/gemv/compile.log 2>&1 || { cat build/gemv/compile.log; exit 1; }
-
-test-gemv: gemv-compile
-	cd build/gemv && $(VVP) -l run.log gemv.vvp
-
-test-gemv-vcs:
-	@mkdir -p build/gemv/vcs
-	cd build/gemv/vcs && $(VCS) -full64 -sverilog -top tb_gemv ../../../rtl/mac.sv ../../../rtl/gemv/gemv.sv ../../../tb/tb_gemv.sv -o simv -l compile.log
-	cd build/gemv/vcs && ./simv -l run.log
-
-test-gemv-full: vectors
-	@mkdir -p build/gemv-regression
-	$(IVERILOG) -g2012 -Wall -s tb_gemv_regression -o build/gemv-regression/gemv.vvp rtl/mac.sv rtl/gemv/gemv.sv tb/tb_gemv_regression.sv > build/gemv-regression/compile.log 2>&1 || { cat build/gemv-regression/compile.log; exit 1; }
-	cd build/gemv-regression && $(VVP) -l run.log gemv.vvp +VECTORS=../vectors/vectors.txt
-
-test-gemv-full-vcs: vectors
-	@mkdir -p build/gemv-regression/vcs
-	cd build/gemv-regression/vcs && $(VCS) -full64 -sverilog -top tb_gemv_regression ../../../rtl/mac.sv ../../../rtl/gemv/gemv.sv ../../../tb/tb_gemv_regression.sv -o simv -l compile.log
-	cd build/gemv-regression/vcs && ./simv -l run.log +VECTORS=../../vectors/vectors.txt
 
 gemm-compile:
 	@mkdir -p $(GEMM_BUILD_DIR)
@@ -262,7 +224,7 @@ test-sram: sram-compile
 
 fifo-compile:
 	@mkdir -p build/fifo
-	$(IVERILOG) -g2012 -Wall -s tb_fifo -o build/fifo/fifo.vvp rtl/fifo.sv tb/tb_fifo.sv > build/fifo/compile.log 2>&1 || { cat build/fifo/compile.log; exit 1; }
+	$(IVERILOG) -g2012 -Wall -DFIFO_PARAMETERIZED -s tb_fifo -o build/fifo/fifo.vvp rtl/fifo.sv tb/tb_fifo.sv > build/fifo/compile.log 2>&1 || { cat build/fifo/compile.log; exit 1; }
 
 test-fifo: fifo-compile
 	cd build/fifo && $(VVP) -l run.log fifo.vvp +SEED=$(SEED)
@@ -282,7 +244,9 @@ test-fifo-configs:
 
 test-fifo-vcs:
 	@mkdir -p build/fifo/vcs
-	cd build/fifo/vcs && $(VCS) -full64 -sverilog -top tb_fifo ../../../rtl/fifo.sv ../../../tb/tb_fifo.sv -o simv -l compile.log
+	cd build/fifo/vcs && $(VCS) -full64 -sverilog +define+FIFO_PARAMETERIZED -top tb_fifo ../../../rtl/fifo.sv ../../../tb/tb_fifo.sv -o simv -l compile.log
 	cd build/fifo/vcs && ./simv -l run.log +SEED=$(SEED)
 
-check: env smoke test-python
+test-rtl-units: test-mac test-pe test-sram test-fifo test-fifo-configs test-systolic-array test-gemm-controller test-systolic-tile-controller test-conventional-tile-controller
+
+check: env test-rtl-units test-gemm-all-sizes test-de2-115

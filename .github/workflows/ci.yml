@@ -1,0 +1,50 @@
+name: Regression
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    name: Python and RTL regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install simulation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes iverilog make tcl
+
+      - name: Run regression suite
+        run: make check
+
+      - name: Save simulation logs and cycle counts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: regression-evidence
+          path: |
+            build/**/*.log
+            build/**/cycles.csv
+            build/**/vectors_manifest.json
+            build/environment.json
+          if-no-files-found: warn
+          retention-days: 14
