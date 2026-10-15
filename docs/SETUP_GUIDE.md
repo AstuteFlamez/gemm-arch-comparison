@@ -50,7 +50,7 @@ it does not represent a new Synopsys PPA study or a physical board test.
 About description and topics. Copy those values into GitHub's About settings
 when ready; GitHub does not apply this file automatically.
 
-## Synopsys on CAE
+## Synopsys on CAE (UW-Madison's Engieering Machines)
 
 The study used **VCS and Design Compiler/Power Compiler Y-2026.03** through CAE's
 supported container. Use your normal account; project scripts need no admin

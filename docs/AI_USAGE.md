@@ -8,7 +8,7 @@ and making the code easier to read.
 - Developing the architectures and working through the RTL.
 - Choosing the comparison: four MACs in each design, with the same shared blocks.
 - Designing the experiment, deciding what to measure, and interpreting the results.
-- Inspecting a few simulation waveforms in Verdi myself.
+- Working alongside AI on running simulation/verification.
 
 ## Where AI helped
 

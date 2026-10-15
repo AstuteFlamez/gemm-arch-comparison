@@ -22,6 +22,31 @@ matrices increase the work and storage, not the compute array size.
 - **Memory dominated the area:** at 32×32, the shared memory wrapper accounted
   for about **97% of mapped cell area**, helping explain the similar PPA results.
 
+## System overview
+
+```mermaid
+flowchart TB
+    HOST["Host / testbench"]
+    MEM["Memory wrapper<br/>A, B and C memories"]
+    FIFOS["Four operand FIFOs"]
+    CORE["Compute core<br/>4 MACs"]
+    CTRL["Job + tile controllers"]
+
+    HOST <-->|"Load A/B; read C"| MEM
+    MEM -->|"INT8 operands"| FIFOS
+    FIFOS --> CORE
+    CORE -->|"4-to-1 select: INT32"| MEM
+    HOST -. "start" .-> CTRL
+    CTRL -. "busy / done" .-> HOST
+    CTRL -. "clear / enable" .-> CORE
+```
+
+The compute core is either the systolic array or the conventional design.
+Solid arrows carry data; dashed arrows show selected control signals. The host loads A/B and
+reads C while idle. During computation, the controllers load the FIFOs, run
+one tile, and write its four results to C one word per clock.
+See [datapaths, control, and timing](docs/ARCHITECTURE.md) for the details.
+
 ## Engineering decisions
 
 I developed the architectures and RTL with AI assistance, chose the comparison
