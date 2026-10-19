@@ -127,6 +127,18 @@ class GemmVectorTests(unittest.TestCase):
                                 actual[row * size + col] += a[row * size + k] * b[k * size + col]
                     self.assertEqual(expected, actual)
 
+    def test_cli_check_missing_output_directory(self):
+        script = Path(__file__).with_name("gen_gemm_vectors.py")
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "missing"
+            command = [sys.executable, str(script), "--check", "--random-count", "0",
+                       "--out-dir", str(output)]
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Missing or stale GEMM vectors:", result.stderr)
+            self.assertIn("expected.hex", result.stderr)
+            self.assertFalse(output.exists())
+
     def test_cli_check_detects_stale_files(self):
         script = Path(__file__).with_name("gen_gemm_vectors.py")
         with tempfile.TemporaryDirectory() as directory:
