@@ -41,7 +41,9 @@ def number(pattern, text):
 def power_mw(label, text):
     match = re.search(re.escape(label) + r"\s*=\s*(" + NUMBER + r")\s*(pW|nW|uW|mW|W)\b", text)
     require(match is not None, f"Missing power or explicit unit: {label}")
-    return float(match[1]) * {"pW": 1e-9, "nW": 1e-6, "uW": 1e-3, "mW": 1, "W": 1000}[match[2]]
+    value = float(match[1]) * {"pW": 1e-9, "nW": 1e-6, "uW": 1e-3, "mW": 1, "W": 1000}[match[2]]
+    require(math.isfinite(value), f"Non-finite power: {label}")
+    return value
 
 
 def scheduled_cycles(size, architecture):

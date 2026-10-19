@@ -17,6 +17,12 @@ class PlotDataTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             power_mw("Total Dynamic Power", "Total Dynamic Power = 3.0")
 
+    def test_nonfinite_power_rejected(self):
+        for value in ("1e309 mW", "-1e309 mW", "1e308 W", "-1e308 W"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "Non-finite power: Cell Leakage Power"):
+                    power_mw("Cell Leakage Power", f"Cell Leakage Power = {value}")
+
     def test_observed_cycles_and_64_schedule(self):
         for size, systolic, conventional in ((8,544,512),(16,3712,3584),(32,27136,26624),(64,206848,204800)):
             self.assertEqual(scheduled_cycles(size,"systolic"),systolic)
