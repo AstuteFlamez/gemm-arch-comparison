@@ -28,6 +28,17 @@ class PlotDataTests(unittest.TestCase):
             self.assertEqual(scheduled_cycles(size,"systolic"),systolic)
             self.assertEqual(scheduled_cycles(size,"conventional"),conventional)
 
+    def test_invalid_cycle_schedule_dimensions(self):
+        for size in (0, -2, 7, 9):
+            for architecture in ("systolic", "conventional"):
+                with self.subTest(size=size, architecture=architecture):
+                    with self.assertRaisesRegex(ValueError, "Expected a positive even matrix dimension"):
+                        scheduled_cycles(size, architecture)
+
+    def test_unknown_cycle_schedule_architecture(self):
+        with self.assertRaisesRegex(ValueError, "Unknown architecture"):
+            scheduled_cycles(8, "unknown")
+
     def test_area_unit_evidence_must_match_library(self):
         review_path = Path(__file__).resolve().parents[1] / "docs/json/saed32-area-units.json"
         evidence = json.loads(review_path.read_text())
