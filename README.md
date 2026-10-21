@@ -114,6 +114,19 @@ pushes and pull requests. These checks use freely available tools; reproducing
 the ASIC area and power study requires Synopsys and library access. See the
 [setup guide](docs/SETUP_GUIDE.md) for the complete flow.
 
+## Python tests
+
+Requires **Python 3.10+**, **Make**, and **Tcl** (`tclsh`); no third-party
+Python packages or HDL tools are needed. From the repository root:
+
+```sh
+make test-python
+```
+
+Checks reference calculations, test vectors, and report helpers; it does not
+simulate RTL. The optional FPGA configuration check skips when `fpga/de2_115/`
+is absent.
+
 ## Explore
 
 - [Architecture and diagrams](docs/ARCHITECTURE.md)
