@@ -114,6 +114,22 @@ pushes and pull requests. These checks use freely available tools; reproducing
 the ASIC area and power study requires Synopsys and library access. See the
 [setup guide](docs/SETUP_GUIDE.md) for the complete flow.
 
+## Cycle calculator
+
+With Python 3.10+ alone, compare the current schedules at the supported sizes:
+
+```sh
+python3 scripts/compare_cycles.py --sizes 8 16 32
+```
+
+The table shows cycles and **schedule-based useful MAC utilization**:
+`100 × N³ / (4 × cycles)`. The numerator counts useful multiply-accumulates;
+there are four MACs available each cycle. At 8×8, systolic uses 544 cycles
+(23.53%) and conventional uses 512 cycles (25.00%). The interval runs from
+accepted start to done, including internal tile loading but excluding external
+input loading and result readback. These are calculations from the existing
+schedule formula; running this command does not perform a simulation.
+
 ## Python tests
 
 Requires **Python 3.10+**, **Make**, and **Tcl** (`tclsh`); no third-party
